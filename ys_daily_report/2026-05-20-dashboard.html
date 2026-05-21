@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ys DEMA Daily 2026-05-20</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/luxon@3"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.2.1"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #1a1a1a; color: #e5e5e5; }
+    .card { background: #2a2a2a; border-color: #3a3a3a; }
+    .muted { color: #999; }
+  }
+  @media (prefers-color-scheme: light) {
+    body { background: #fafaf8; color: #1a1a1a; }
+    .card { background: #ffffff; border-color: #e5e5e0; }
+    .muted { color: #666; }
+  }
+</style>
+</head>
+<body class="p-6 max-w-4xl mx-auto">
+  <!-- ヘッダー -->
+  <header class="flex justify-between items-center mb-6 flex-wrap gap-2">
+    <div>
+      <p class="text-xs muted">Ys DEMA v9.0 / 2026-05-20 (JST)</p>
+      <h1 class="text-2xl font-medium mt-1">日次レポート</h1>
+    </div>
+    <div class="flex gap-2 flex-wrap">
+      <span class="text-xs px-2 py-1 rounded bg-amber-100 text-amber-900">F&G 39 Fear</span>
+      <span class="text-xs px-2 py-1 rounded bg-red-100 text-red-900">PF 0.53 苦戦</span>
+      <span class="text-xs px-2 py-1 rounded bg-amber-100 text-amber-900">⚠ サイズ50%抑制</span>
+    </div>
+  </header>
+
+  <!-- メトリックカード -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+    <div class="card border rounded-lg p-3">
+      <p class="text-xs muted mb-1">BTC</p>
+      <p class="text-2xl font-medium">$77,200</p>
+      <p class="text-xs muted mt-1">+0.37% 24h</p>
+    </div>
+    <div class="card border rounded-lg p-3">
+      <p class="text-xs muted mb-1">推奨レンジ</p>
+      <p class="text-lg font-medium">75.8–78.6K</p>
+      <p class="text-xs muted mt-1">ATR+BB平均(推定)</p>
+    </div>
+    <div class="card border rounded-lg p-3">
+      <p class="text-xs muted mb-1">バイアス</p>
+      <p class="text-2xl font-medium">Neutral</p>
+      <p class="text-xs muted mt-1">やや弱気寄り</p>
+    </div>
+    <div class="card border rounded-lg p-3">
+      <p class="text-xs muted mb-1">ボラ予測</p>
+      <p class="text-2xl font-medium">中</p>
+      <p class="text-xs muted mt-1">決算で高リスク</p>
+    </div>
+  </div>
+
+  <!-- レンジ予測バー -->
+  <h2 class="text-lg font-medium mb-2">レンジ予測</h2>
+  <div class="card border rounded-lg p-4 mb-6 relative h-24">
+    <div class="absolute top-8 left-0 right-0 h-5 bg-gray-200 rounded"></div>
+    <div class="absolute top-8 h-5 rounded bg-blue-200 opacity-50" style="left: 0%; width: 100%;"></div>
+    <div class="absolute top-8 h-5 rounded bg-green-300 opacity-60" style="left: 15%; width: 70%;"></div>
+    <div class="absolute top-6 w-0.5 h-9 bg-black" style="left: 50%;"></div>
+    <p class="absolute top-0 text-xs font-medium" style="left: 44%;">$77,200</p>
+    <p class="absolute top-16 text-xs muted" style="left: 1%;">ATR-<br>$75,200</p>
+    <p class="absolute top-16 text-xs text-blue-700" style="left: 14%;">推奨-<br>$75,800</p>
+    <p class="absolute top-16 text-xs text-blue-700" style="left: 70%;">推奨+<br>$78,600</p>
+    <p class="absolute top-16 text-xs muted" style="left: 86%;">ATR+<br>$79,200</p>
+  </div>
+
+  <!-- ロウソク足チャート -->
+  <h2 class="text-lg font-medium mb-2">BTC日足 + 予測帯 (30日)</h2>
+  <div class="card border rounded-lg p-3 mb-2">
+    <canvas id="candle" height="120"></canvas>
+    <p id="chartNote" class="text-xs muted mt-2">Binance APIから日足取得中… (ブラウザ側fetch)</p>
+  </div>
+  <p class="text-xs muted mb-6">凡例: 緑=陽線 / 赤=陰線 / 緑帯=Claude予測レンジ / 点線=予測中央</p>
+
+  <!-- 予測精度トラッキング -->
+  <h2 class="text-lg font-medium mb-2">予測精度 (直近検証分)</h2>
+  <div class="grid grid-cols-3 gap-3 mb-6">
+    <div class="card border rounded-lg p-3 text-center">
+      <p class="text-xs muted mb-1">レンジ的中率</p>
+      <p class="text-2xl font-medium">100%</p>
+      <p class="text-xs muted mt-1">1/1 (N小)</p>
+    </div>
+    <div class="card border rounded-lg p-3 text-center">
+      <p class="text-xs muted mb-1">バイアス一致率</p>
+      <p class="text-2xl font-medium">100%</p>
+      <p class="text-xs muted mt-1">1/1 (N小)</p>
+    </div>
+    <div class="card border rounded-lg p-3 text-center">
+      <p class="text-xs muted mb-1">平均誤差</p>
+      <p class="text-2xl font-medium">$298</p>
+      <p class="text-xs muted mt-1">予測中央 vs 終値</p>
+    </div>
+  </div>
+
+  <!-- マクロ + Crypto 2列 -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+    <div>
+      <h2 class="text-lg font-medium mb-2">マクロ (前日close 5/19)</h2>
+      <div class="card border rounded-lg p-3">
+        <table class="w-full text-sm">
+          <tr><td class="muted py-1">S&P500</td><td class="text-right">7,353.61</td><td class="text-right text-red-600 pl-2">-0.67%</td></tr>
+          <tr><td class="muted py-1">Nasdaq</td><td class="text-right">25,870.71</td><td class="text-right text-red-600 pl-2">-0.84%</td></tr>
+          <tr><td class="muted py-1">VIX</td><td class="text-right">18.06</td><td class="text-right text-red-600 pl-2">+1.35%</td></tr>
+          <tr><td class="muted py-1">DXY</td><td class="text-right">99.26</td><td class="text-right text-green-600 pl-2">+0.31%</td></tr>
+          <tr><td class="muted py-1">US10Y</td><td class="text-right">4.67%</td><td class="text-right text-red-600 pl-2">+1.5%</td></tr>
+          <tr><td class="muted py-1">Gold</td><td class="text-right">~4,475</td><td class="text-right text-red-600 pl-2">-1.9%</td></tr>
+          <tr><td class="muted py-1">WTI</td><td class="text-right">104.07</td><td class="text-right text-green-600 pl-2">+1.57%</td></tr>
+        </table>
+      </div>
+    </div>
+    <div>
+      <h2 class="text-lg font-medium mb-2">Crypto指標 (5/20)</h2>
+      <div class="card border rounded-lg p-3">
+        <table class="w-full text-sm">
+          <tr><td class="muted py-1">時価総額</td><td class="text-right">$2.664T</td></tr>
+          <tr><td class="muted py-1">BTCドミナンス</td><td class="text-right">58.2%</td></tr>
+          <tr><td class="muted py-1">Fear&Greed</td><td class="text-right">39 (Fear) ←61</td></tr>
+          <tr><td class="muted py-1">BTC Funding</td><td class="text-right">負/中立</td></tr>
+          <tr><td class="muted py-1">BTC OI</td><td class="text-right">高位 (2026最大)</td></tr>
+          <tr><td class="muted py-1">ETH</td><td class="text-right">$2,123 (-0.50%)</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 戦略パラメータ -->
+  <h2 class="text-lg font-medium mb-2">戦略パラメータ (直近30日)</h2>
+  <div class="rounded-lg p-3 mb-6 border bg-red-50">
+    <div class="flex justify-around text-center gap-2 flex-wrap">
+      <div><p class="text-xs muted">N</p><p class="text-lg font-medium">14</p></div>
+      <div><p class="text-xs muted">WR</p><p class="text-lg font-medium">35.7%</p></div>
+      <div><p class="text-xs muted">PF</p><p class="text-lg font-medium text-red-700">0.53</p></div>
+      <div><p class="text-xs muted">Net</p><p class="text-lg font-medium text-red-700">-1.28%</p></div>
+      <div><p class="text-xs muted">MaxDD</p><p class="text-lg font-medium">2.04%</p></div>
+    </div>
+  </div>
+
+  <!-- 推奨パラメータテーブル -->
+  <h2 class="text-lg font-medium mb-2">推奨パラメータ (週次最適化由来・参考)</h2>
+  <div class="card border rounded-lg p-3 mb-2 overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead><tr class="muted text-left"><th class="py-1">項目</th><th>現状</th><th>→</th><th>推奨</th><th class="text-right">差分</th></tr></thead>
+      <tbody>
+        <tr><td class="py-1">ATR乗数</td><td>1.2</td><td>→</td><td>1.5</td><td class="text-right">+0.3</td></tr>
+        <tr><td class="py-1">Trail起動%</td><td>0.1</td><td>→</td><td>0.3</td><td class="text-right">+0.2</td></tr>
+        <tr><td class="py-1">CO</td><td>4</td><td>→</td><td>2</td><td class="text-right">-2</td></tr>
+        <tr><td class="py-1">Vol順</td><td>1.5</td><td>→</td><td>1.2</td><td class="text-right">-0.3</td></tr>
+        <tr><td class="py-1">Range%</td><td>1.2</td><td>→</td><td>1.5</td><td class="text-right">+0.3</td></tr>
+        <tr class="border-t"><td class="py-1">期待PF</td><td>0.53</td><td>→</td><td>2.20</td><td class="text-right text-green-600">+1.67</td></tr>
+        <tr><td class="py-1">期待WR</td><td>35.7%</td><td>→</td><td>42.9%</td><td class="text-right text-green-600">+7.2pt</td></tr>
+        <tr><td class="py-1">期待Net%</td><td>-1.28</td><td>→</td><td>+1.59</td><td class="text-right text-green-600">+2.87</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="rounded-lg p-3 mb-6 border bg-amber-50 text-sm text-amber-900">
+    ⚠️ <strong>過剰最適化懸念大 (N=7&lt;20)</strong>。判定: <strong>現状維持</strong>。週次PCローカル検証推奨。本Routineでは最適化実施せず。
+  </div>
+
+  <!-- アクション -->
+  <h2 class="text-lg font-medium mb-2">アクション</h2>
+  <div class="card border rounded-lg p-4 mb-4">
+    <div class="flex flex-wrap gap-2 mb-2">
+      <span class="text-xs px-2 py-1 rounded bg-amber-100 text-amber-900">⚠ サイズ50%抑制継続</span>
+      <span class="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">パラメータ現状維持</span>
+    </div>
+    <p class="text-sm mt-2"><strong>注目価格:</strong> 下 $76,845 (24h安値) / 上 $78,000 (BB抵抗)</p>
+    <p class="text-sm mt-1"><strong>警戒:</strong> F&G 61→39反落・リスクオフ地合い / OI高位で清算カスケード / Nvidia決算後ギャップ / 月間-7%=トレンド月危険域接近</p>
+  </div>
+
+  <!-- ボタン -->
+  <div class="flex gap-2 flex-wrap mb-6">
+    <button onclick="sendPrompt('推奨パラメータの根拠と過剰最適化リスクを詳しく')" class="text-sm px-3 py-2 rounded border card">根拠詳細 ↗</button>
+    <button onclick="sendPrompt('週次PCローカル最適化結果を反映')" class="text-sm px-3 py-2 rounded border card">週次結果取込 ↗</button>
+  </div>
+
+  <footer class="text-xs muted text-center mt-6">
+    自動生成 by Claude.ai Routine / Ys Daily Report v1.0<br>
+    分析支援のみ・投資助言ではない / 確信度 中-低 (API制約・決算前)
+  </footer>
+
+<script>
+function sendPrompt(t){
+  try { window.parent.postMessage({ type:'claude-prompt', prompt:t }, '*'); } catch(e){}
+  try { window.parent.postMessage({ type:'sendPrompt', prompt:t }, '*'); } catch(e){}
+}
+
+// Claude予測 (過去レポートmd由来)
+const predictions = {
+  '2026-05-19': { low:76000, high:78500, mid:77250 },
+  '2026-05-20': { low:75800, high:78600, mid:77200 }
+};
+
+async function drawChart(){
+  const note = document.getElementById('chartNote');
+  let klines;
+  try {
+    const r = await fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=30');
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    klines = await r.json();
+  } catch(e){
+    note.textContent = 'Binance API取得失敗 ('+e.message+') — チャート省略。価格はレポート本文参照。';
+    return;
+  }
+  note.textContent = 'Binance日足30本 + Claude予測帯オーバーレイ';
+
+  const ohlc = klines.map(k => ({ x: k[0], o:+k[1], h:+k[2], l:+k[3], c:+k[4] }));
+  const dayMs = 86400000;
+  const predHigh = [], predLow = [], predMid = [];
+  ohlc.forEach(c => {
+    const d = luxon.DateTime.fromMillis(c.x).toFormat('yyyy-MM-dd');
+    const p = predictions[d];
+    predHigh.push({ x:c.x, y: p? p.high : null });
+    predLow.push({ x:c.x, y: p? p.low : null });
+    predMid.push({ x:c.x, y: p? p.mid : null });
+  });
+
+  new Chart(document.getElementById('candle').getContext('2d'), {
+    data: {
+      datasets: [
+        { type:'candlestick', label:'BTCUSDT', data: ohlc, order:3,
+          color:{ up:'#22c55e', down:'#ef4444', unchanged:'#999' } },
+        { type:'line', label:'予測+', data:predHigh, borderColor:'rgba(34,197,94,0)',
+          backgroundColor:'rgba(34,197,94,0.18)', fill:'+1', pointRadius:0, spanGaps:false, order:1 },
+        { type:'line', label:'予測-', data:predLow, borderColor:'rgba(34,197,94,0)',
+          pointRadius:0, spanGaps:false, order:1 },
+        { type:'line', label:'予測中央', data:predMid, borderColor:'#16a34a',
+          borderDash:[4,3], borderWidth:1.5, pointRadius:0, spanGaps:false, order:0 }
+      ]
+    },
+    options: {
+      responsive:true,
+      plugins:{ legend:{ display:false } },
+      scales:{
+        x:{ type:'time', time:{ unit:'day' }, ticks:{ maxTicksLimit:8, color:'#999' }, grid:{ display:false } },
+        y:{ ticks:{ color:'#999' }, grid:{ color:'rgba(128,128,128,0.15)' } }
+      }
+    }
+  });
+}
+drawChart();
+</script>
+</body>
+</html>

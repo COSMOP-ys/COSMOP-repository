@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ys DEMA Daily 2026-05-19</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #1a1a1a; color: #e5e5e5; }
+    .card { background: #2a2a2a; border-color: #3a3a3a; }
+    .muted { color: #999; }
+  }
+  @media (prefers-color-scheme: light) {
+    body { background: #fafaf8; color: #1a1a1a; }
+    .card { background: #ffffff; border-color: #e5e5e0; }
+    .muted { color: #666; }
+  }
+</style>
+</head>
+<body class="p-6 max-w-4xl mx-auto">
+  <!-- ヘッダー -->
+  <header class="flex justify-between items-center mb-6 flex-wrap gap-2">
+    <div>
+      <p class="text-xs muted">Ys DEMA v9.0 / 2026-05-19 (JST) v2更新版</p>
+      <h1 class="text-2xl font-medium mt-1">日次レポート</h1>
+    </div>
+    <div class="flex gap-2 flex-wrap">
+      <span class="text-xs px-2 py-1 rounded bg-blue-100 text-blue-900">F&amp;G 61 Greed</span>
+      <span class="text-xs px-2 py-1 rounded bg-red-100 text-red-900">PF 0.53 苦戦</span>
+      <span class="text-xs px-2 py-1 rounded bg-amber-100 text-amber-900">⚠ 情勢急変</span>
+    </div>
+  </header>
+
+  <!-- メトリックカード -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+    <div class="card border rounded-lg p-3">
+      <p class="text-xs muted mb-1">BTC</p>
+      <p class="text-2xl font-medium">$76,685</p>
+      <p class="text-xs text-red-600 mt-1">-0.60% 24h</p>
+    </div>
+    <div class="card border rounded-lg p-3">
+      <p class="text-xs muted mb-1">推奨レンジ</p>
+      <p class="text-lg font-medium">75.4–78.1K</p>
+      <p class="text-xs muted mt-1">ATR+BB平均</p>
+    </div>
+    <div class="card border rounded-lg p-3">
+      <p class="text-xs muted mb-1">バイアス</p>
+      <p class="text-2xl font-medium">Neutral+</p>
+      <p class="text-xs muted mt-1">F&amp;G急騰反発</p>
+    </div>
+    <div class="card border rounded-lg p-3">
+      <p class="text-xs muted mb-1">ボラ予測</p>
+      <p class="text-2xl font-medium">中-高</p>
+      <p class="text-xs muted mt-1">24h振幅 2.30%</p>
+    </div>
+  </div>
+
+  <!-- レンジ予測バー -->
+  <h2 class="text-lg font-medium mb-2">レンジ予測</h2>
+  <div class="card border rounded-lg p-4 mb-6 relative" style="height: 110px;">
+    <!-- 帯背景 -->
+    <div class="absolute left-4 right-4" style="top: 40px; height: 20px; background: #e5e7eb; border-radius: 4px;"></div>
+    <!-- ATR帯 (青、薄) 0%~100% -->
+    <div class="absolute" style="top: 40px; left: 4%; right: 4%; height: 20px; background: rgba(96,165,250,0.35); border-radius: 4px;"></div>
+    <!-- 推奨レンジ (緑、濃) 18.4%~85.5% → leftオフセット適用 -->
+    <div class="absolute" style="top: 40px; left: 21%; width: 62%; height: 20px; background: rgba(74,222,128,0.55); border-radius: 4px;"></div>
+    <!-- 現在価格マーカー 50% -->
+    <div class="absolute" style="top: 32px; left: 50%; width: 2px; height: 36px; background: #000;"></div>
+    <p class="absolute text-xs font-medium" style="top: 12px; left: 44%;">$76,685</p>
+    <!-- 各レベルのラベル -->
+    <p class="absolute text-xs muted" style="top: 70px; left: 2%;">ATR-<br>$74,722</p>
+    <p class="absolute text-xs text-green-700" style="top: 70px; left: 18%;">推奨-<br>$75,446</p>
+    <p class="absolute text-xs text-green-700" style="top: 70px; left: 76%;">推奨+<br>$78,079</p>
+    <p class="absolute text-xs muted" style="top: 70px; right: 2%;">ATR+<br>$78,648</p>
+  </div>
+
+  <!-- マクロ + Crypto 2列 -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+    <div>
+      <h2 class="text-lg font-medium mb-2">マクロ (5/18 close)</h2>
+      <div class="card border rounded-lg p-3">
+        <table class="w-full text-sm">
+          <tr><td class="muted py-1">S&amp;P500</td><td class="text-right">7,403.05</td><td class="text-right text-red-600 pl-2">-0.07%</td></tr>
+          <tr><td class="muted py-1">Nasdaq</td><td class="text-right">26,090.73</td><td class="text-right text-red-600 pl-2">-0.45%</td></tr>
+          <tr><td class="muted py-1">VIX</td><td class="text-right">17.82</td><td class="text-right text-green-600 pl-2">-3.31%</td></tr>
+          <tr><td class="muted py-1">DXY</td><td class="text-right">98.91</td><td class="text-right text-green-600 pl-2">-0.19%</td></tr>
+          <tr><td class="muted py-1">US10Y</td><td class="text-right">4.60%</td><td class="text-right text-green-600 pl-2">-0.43%</td></tr>
+          <tr><td class="muted py-1">Gold</td><td class="text-right">4,560.0</td><td class="text-right text-green-600 pl-2">+0.16%</td></tr>
+          <tr><td class="muted py-1">WTI</td><td class="text-right">102.83</td><td class="text-right text-red-600 pl-2">-5.37%</td></tr>
+        </table>
+      </div>
+    </div>
+    <div>
+      <h2 class="text-lg font-medium mb-2">Crypto指標</h2>
+      <div class="card border rounded-lg p-3">
+        <table class="w-full text-sm">
+          <tr><td class="muted py-1">時価総額</td><td class="text-right">$2.642T</td><td class="text-right text-red-600 pl-2">-0.30%</td></tr>
+          <tr><td class="muted py-1">BTC.D</td><td class="text-right">58.20%</td><td class="text-right pl-2">+0.11pt</td></tr>
+          <tr><td class="muted py-1">F&amp;G</td><td class="text-right">61 (Greed)</td><td class="text-right text-green-600 pl-2">前日25</td></tr>
+          <tr><td class="muted py-1">Funding MEXC</td><td class="text-right">中立~微負</td><td class="text-right pl-2">-</td></tr>
+          <tr><td class="muted py-1">BTC OI</td><td class="text-right">高位⚠</td><td class="text-right pl-2">最大幅増</td></tr>
+          <tr><td class="muted py-1">BTC 24h vol</td><td class="text-right">$5,564M</td><td class="text-right pl-2">-</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 戦略パラメータ -->
+  <h2 class="text-lg font-medium mb-2">戦略パラメータ実績 (直近30日)</h2>
+  <div class="rounded-lg p-3 mb-6 border bg-red-50">
+    <div class="flex justify-around text-center gap-2 flex-wrap">
+      <div><p class="text-xs muted">N</p><p class="text-lg font-medium">14</p></div>
+      <div><p class="text-xs muted">WR</p><p class="text-lg font-medium text-red-700">35.71%</p></div>
+      <div><p class="text-xs muted">PF</p><p class="text-lg font-medium text-red-700">0.53</p></div>
+      <div><p class="text-xs muted">Net</p><p class="text-lg font-medium text-red-700">-1.28%</p></div>
+      <div><p class="text-xs muted">MaxDD</p><p class="text-lg font-medium">2.04%</p></div>
+    </div>
+    <p class="text-xs muted text-center mt-2">⚠ PF&lt;1 = 苦戦中、パラメータ変更は週次ローカル検証まで保留</p>
+  </div>
+
+  <!-- アクション -->
+  <h2 class="text-lg font-medium mb-2">アクション</h2>
+  <div class="card border rounded-lg p-4 mb-4">
+    <div class="flex flex-wrap gap-2 mb-2">
+      <span class="text-xs px-2 py-1 rounded bg-amber-100 text-amber-900">⚠ サイズ50%抑制推奨</span>
+      <span class="text-xs px-2 py-1 rounded bg-red-100 text-red-900">⚠ 情勢急変・F&amp;G急騰</span>
+      <span class="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">パラメータ現状維持</span>
+    </div>
+    <p class="text-sm mt-2"><strong>注目価格:</strong> 下 $76,000 / $75,500 / $74,720 — 上 $77,500 / $78,200 / $78,650</p>
+    <p class="text-sm mt-1"><strong>警戒:</strong> F&amp;G単日25→61反転=トレンド転換初動の可能性、BTC OI 2026年最大幅増=レバ過熱、Strait of Hormuz続報、米経済指標</p>
+    <p class="text-sm mt-1"><strong>戦略影響:</strong> mean reversion 仮定に逆風転換リスク、上方ブレイク時は$78,800→$80,000試しの可能性</p>
+  </div>
+
+  <footer class="text-xs muted text-center mt-6">
+    自動生成 by Claude.ai Routine / Ys Daily Report v1.0<br>
+    確信度: 中-低 (情勢急変直後) / 分析支援のみ・投資助言ではない
+  </footer>
+</body>
+</html>
