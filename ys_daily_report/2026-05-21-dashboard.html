@@ -27,7 +27,7 @@
 
   <!-- データ制約バナー -->
   <div class="rounded-lg p-3 mb-4 border bg-amber-50 text-amber-900 text-xs">
-    ⚠️ <strong>データ制約</strong>: 生成環境は取引所/指数API遮断・Google Drive承認待ち。マクロ/Crypto値はWeb検索ベースの<strong>近似</strong>(確信度 中)。下のキャンドルは<strong>閲覧中ブラウザから Binance API を直接取得</strong>(失敗時は近似補間にフォールバック)。投資助言ではない。
+    ⚠️ <strong>データ出所</strong>: 生成環境はAPI遮断のためマクロ値はWeb検索の<strong>近似</strong>。一方 <strong>BTC価格・ATR14(日足)・BB(1h,20,2σ)・推奨レンジ・F&G・時価総額/ドミナンスは閲覧ブラウザが各API(Binance/alternative.me/CoinGecko)を直接取得し実計算で置換</strong>(取得失敗時は生成時推定値を維持)。下の「データ出所」行で実計算か推定かを確認可。投資助言ではない。
   </div>
 
   <!-- ヘッダー -->
@@ -37,7 +37,7 @@
       <h1 class="text-2xl font-medium mt-1">日次レポート</h1>
     </div>
     <div class="flex gap-2 flex-wrap">
-      <span class="text-xs px-2 py-1 rounded bg-amber-100 text-amber-900">F&G 29 Fear</span>
+      <span id="fgBadge" class="text-xs px-2 py-1 rounded bg-amber-100 text-amber-900">F&G 29 Fear</span>
       <span class="text-xs px-2 py-1 rounded bg-green-100 text-green-900">PF 2.05 良好</span>
       <span class="text-xs px-2 py-1 rounded bg-gray-200 text-gray-800">確信度 中</span>
     </div>
@@ -45,25 +45,26 @@
 
   <!-- メトリックカード -->
   <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-    <div class="card border rounded-lg p-3"><p class="text-xs muted mb-1">BTC</p><p class="text-2xl font-medium">$77,850</p><p class="text-xs muted mt-1">+0.72% 24h</p></div>
-    <div class="card border rounded-lg p-3"><p class="text-xs muted mb-1">推奨レンジ</p><p class="text-lg font-medium">76.1–79.2K</p><p class="text-xs muted mt-1">ATR+BB平均</p></div>
+    <div class="card border rounded-lg p-3"><p class="text-xs muted mb-1">BTC</p><p id="btcPrice" class="text-2xl font-medium">$77,850</p><p id="btcChg" class="text-xs muted mt-1">+0.72% 24h</p></div>
+    <div class="card border rounded-lg p-3"><p class="text-xs muted mb-1">推奨レンジ</p><p id="recRange" class="text-lg font-medium">76.1–79.2K</p><p id="recRangeSub" class="text-xs muted mt-1">ATR+BB平均</p></div>
     <div class="card border rounded-lg p-3"><p class="text-xs muted mb-1">バイアス</p><p class="text-2xl font-medium">Neutral</p><p class="text-xs muted mt-1">微Long(押し目)</p></div>
     <div class="card border rounded-lg p-3"><p class="text-xs muted mb-1">ボラ予測</p><p class="text-2xl font-medium">中</p><p class="text-xs muted mt-1">24h振幅 ~2.5%</p></div>
   </div>
 
   <!-- レンジ予測バー (5点プロット) -->
   <h2 class="text-lg font-medium mb-2">レンジ予測 (本日)</h2>
-  <div class="card border rounded-lg p-4 mb-6 relative h-24">
+  <div class="card border rounded-lg p-4 mb-2 relative h-24">
     <div class="absolute top-8 left-0 right-0 h-5 bg-gray-200 rounded"></div>
-    <div class="absolute top-8 h-5 rounded bg-blue-200 opacity-50" style="left: 11%; width: 77%;"></div>
-    <div class="absolute top-8 h-5 rounded bg-green-300 opacity-60" style="left: 19%; width: 55%;"></div>
-    <div class="absolute top-6 w-0.5 h-9 bg-black" style="left: 50%;"></div>
-    <p class="absolute top-0 text-xs font-medium" style="left: 45%;">$77,850</p>
-    <p class="absolute top-16 text-xs muted" style="left: 4%;">ATR-<br>$75,650</p>
-    <p class="absolute top-16 text-xs text-blue-700" style="left: 19%;">推奨-<br>$76,100</p>
-    <p class="absolute top-16 text-xs text-blue-700" style="left: 70%;">推奨+<br>$79,200</p>
-    <p class="absolute top-16 text-xs muted" style="left: 86%;">ATR+<br>$80,050</p>
+    <div id="barAtr" class="absolute top-8 h-5 rounded bg-blue-200 opacity-50" style="left: 11%; width: 77%;"></div>
+    <div id="barRec" class="absolute top-8 h-5 rounded bg-green-300 opacity-60" style="left: 19%; width: 55%;"></div>
+    <div id="barCur" class="absolute top-6 w-0.5 h-9 bg-black" style="left: 50%;"></div>
+    <p id="barCurLbl" class="absolute top-0 text-xs font-medium" style="left: 50%; transform: translateX(-50%);">$77,850</p>
+    <p id="lblAtrLo" class="absolute top-16 text-xs muted" style="left: 11%; transform: translateX(-50%);">ATR-<br>$75,650</p>
+    <p id="lblRecLo" class="absolute top-16 text-xs text-blue-700" style="left: 19%; transform: translateX(-50%);">推奨-<br>$76,100</p>
+    <p id="lblRecHi" class="absolute top-16 text-xs text-blue-700" style="left: 74%; transform: translateX(-50%);">推奨+<br>$79,200</p>
+    <p id="lblAtrHi" class="absolute top-16 text-xs muted" style="left: 89%; transform: translateX(-50%);">ATR+<br>$80,050</p>
   </div>
+  <p id="calcSrc" class="text-xs muted mb-6">ATR14/BB: 生成時推定値を表示中… (ブラウザ取得成功時は実計算値に置換)</p>
 
   <!-- ロウソク足チャート + 予測帯重ね描き -->
   <h2 class="text-lg font-medium mb-2">BTC 日足30本 vs Claude予測帯</h2>
@@ -106,9 +107,9 @@
     <div>
       <h2 class="text-lg font-medium mb-2">Crypto指標</h2>
       <div class="card border rounded-lg p-3"><table class="w-full text-sm"><tbody>
-        <tr class="border-b"><td class="py-1 muted">時価総額</td><td class="text-right">$2.64T</td><td class="text-right muted pl-2">-0.14%</td></tr>
-        <tr class="border-b"><td class="py-1 muted">BTC Dominance</td><td class="text-right">58.3%</td><td class="text-right muted pl-2">高位</td></tr>
-        <tr class="border-b"><td class="py-1 muted">Fear &amp; Greed</td><td class="text-right text-amber-700">29 Fear</td><td class="text-right muted pl-2">前日~33↓</td></tr>
+        <tr class="border-b"><td class="py-1 muted">時価総額</td><td id="mcapCell" class="text-right">$2.64T</td><td class="text-right muted pl-2">-0.14%</td></tr>
+        <tr class="border-b"><td class="py-1 muted">BTC Dominance</td><td id="domCell" class="text-right">58.3%</td><td class="text-right muted pl-2">高位</td></tr>
+        <tr class="border-b"><td class="py-1 muted">Fear &amp; Greed</td><td id="fgCell" class="text-right text-amber-700">29 Fear</td><td id="fgPrev" class="text-right muted pl-2">前日~33↓</td></tr>
         <tr class="border-b"><td class="py-1 muted">BTC Funding</td><td class="text-right text-red-700">マイナス</td><td class="text-right muted pl-2">82日連続</td></tr>
         <tr class="border-b"><td class="py-1 muted">BTC OI</td><td class="text-right">~$23B</td><td class="text-right muted pl-2">推</td></tr>
         <tr><td class="py-1 muted">ETH</td><td class="text-right">~$2,120</td><td class="text-right muted pl-2">+0.3%</td></tr>
@@ -186,14 +187,17 @@
   }
   </script>
 
-  <!-- キャンドルチャートJS (ブラウザから Binance を直接取得) -->
+  <!-- ライブ計算JS: ブラウザ(住宅IP)から各APIを直接取得し ATR14/BB を実計算 -->
+  <!-- サーバ(生成環境)はAPI 403のため、数値はブラウザ側で実値に置換する設計 -->
   <script>
   (function(){
-    // Claude予測帯 (過去レポート md より): 取得済み分のみ
+    // Claude予測帯 (過去レポート md 由来): 取得済み分のみ
     const predData=[
       {x:Date.UTC(2026,4,19),low:76000,high:78500,mid:77250},
       {x:Date.UTC(2026,4,21),low:76200,high:79000,mid:77600}
     ];
+    const fmtUSD=v=>'$'+Math.round(v).toLocaleString();
+    const fmtK=v=>(v/1000).toFixed(1)+'K';
 
     function fallbackCandles(){
       // API失敗時: 主要アンカー終値間を線形補間した近似OHLC (実勢ではない)
@@ -217,7 +221,7 @@
       return out;
     }
 
-    function render(candleData,srcLabel){
+    function renderChart(candleData,srcLabel){
       document.getElementById('chartSrc').textContent=srcLabel;
       const ctx=document.getElementById('candleChart').getContext('2d');
       new Chart(ctx,{
@@ -233,26 +237,117 @@
           interaction:{mode:'index',intersect:false},
           plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){
             const ds=c.dataset.label;
-            if(ds==='BTC'){const d=c.raw;return ['O: $'+Math.round(d.o).toLocaleString(),'H: $'+Math.round(d.h).toLocaleString(),'L: $'+Math.round(d.l).toLocaleString(),'C: $'+Math.round(d.c).toLocaleString()];}
-            return ds+': $'+Math.round(c.parsed.y).toLocaleString();
+            if(ds==='BTC'){const d=c.raw;return ['O: '+fmtUSD(d.o),'H: '+fmtUSD(d.h),'L: '+fmtUSD(d.l),'C: '+fmtUSD(d.c)];}
+            return ds+': '+fmtUSD(c.parsed.y);
           }}}},
           scales:{
             x:{type:'time',time:{unit:'day',displayFormats:{day:'M/d'}},ticks:{color:'#888780',font:{size:10},maxTicksLimit:10},grid:{color:'rgba(136,135,128,0.1)'}},
-            y:{ticks:{color:'#888780',font:{size:10},callback:v=>'$'+(v/1000).toFixed(1)+'K'},grid:{color:'rgba(136,135,128,0.1)'}}
+            y:{ticks:{color:'#888780',font:{size:10},callback:v=>'$'+fmtK(v)},grid:{color:'rgba(136,135,128,0.1)'}}
           }
         }
       });
     }
 
+    // ATR14 (Wilder) を日足から算出
+    function atr14(c){
+      if(c.length<15)return null;
+      const tr=[];
+      for(let i=1;i<c.length;i++){
+        tr.push(Math.max(c[i].h-c[i].l, Math.abs(c[i].h-c[i-1].c), Math.abs(c[i].l-c[i-1].c)));
+      }
+      let a=tr.slice(0,14).reduce((s,v)=>s+v,0)/14;
+      for(let i=14;i<tr.length;i++) a=(a*13+tr[i])/14;
+      return a;
+    }
+    // BB(20,2σ): 終値配列から
+    function bb(closes,n=20,k=2){
+      if(closes.length<n)return null;
+      const s=closes.slice(-n);
+      const m=s.reduce((x,v)=>x+v,0)/n;
+      const sd=Math.sqrt(s.reduce((x,v)=>x+(v-m)*(v-m),0)/n);
+      return {low:m-k*sd, high:m+k*sd, mid:m};
+    }
+
+    // レンジ予測バーを実値で再描画
+    function updateBar(price,atrLo,atrHi,recLo,recHi){
+      const lo=Math.min(atrLo,recLo), hi=Math.max(atrHi,recHi);
+      const pad=(hi-lo)*0.08, min=lo-pad, max=hi+pad, span=max-min;
+      const pos=v=>Math.max(0,Math.min(100,(v-min)/span*100));
+      const set=(id,l)=>{const e=document.getElementById(id);if(e)e.style.left=pos(l)+'%';};
+      const atrEl=document.getElementById('barAtr'); if(atrEl){atrEl.style.left=pos(atrLo)+'%';atrEl.style.width=(pos(atrHi)-pos(atrLo))+'%';}
+      const recEl=document.getElementById('barRec'); if(recEl){recEl.style.left=pos(recLo)+'%';recEl.style.width=(pos(recHi)-pos(recLo))+'%';}
+      set('barCur',price); set('barCurLbl',price);
+      document.getElementById('barCurLbl').textContent=fmtUSD(price);
+      set('lblAtrLo',atrLo); document.getElementById('lblAtrLo').innerHTML='ATR-<br>'+fmtUSD(atrLo);
+      set('lblRecLo',recLo); document.getElementById('lblRecLo').innerHTML='推奨-<br>'+fmtUSD(recLo);
+      set('lblRecHi',recHi); document.getElementById('lblRecHi').innerHTML='推奨+<br>'+fmtUSD(recHi);
+      set('lblAtrHi',atrHi); document.getElementById('lblAtrHi').innerHTML='ATR+<br>'+fmtUSD(atrHi);
+    }
+
+    // 1) 日足 → キャンドル + ATR14 + 価格
     fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=30')
       .then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
       .then(k=>{
         const cd=k.map(row=>({x:row[0],o:+row[1],h:+row[2],l:+row[3],c:+row[4]}));
-        render(cd,'データ: Binance BTCUSDT 日足 (ライブ取得)');
+        renderChart(cd,'データ: Binance BTCUSDT 日足 (ライブ取得)');
+        const price=cd[cd.length-1].c;
+        const atr=atr14(cd);
+        document.getElementById('btcPrice').textContent=fmtUSD(price);
+        // 24h変化 (前日終値比)
+        const prevC=cd[cd.length-2].c, chg=(price-prevC)/prevC*100;
+        document.getElementById('btcChg').textContent=(chg>=0?'+':'')+chg.toFixed(2)+'% 24h';
+        // BB は 1h 足で別途取得
+        fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=20')
+          .then(r=>r.ok?r.json():Promise.reject(new Error('HTTP '+r.status)))
+          .then(h=>{
+            const closes=h.map(row=>+row[4]);
+            const b=bb(closes);
+            const atrLo=price-atr, atrHi=price+atr;
+            const recLo=(atrLo+b.low)/2, recHi=(atrHi+b.high)/2;
+            updateBar(price,atrLo,atrHi,recLo,recHi);
+            document.getElementById('recRange').textContent=fmtK(recLo)+'–'+fmtK(recHi);
+            document.getElementById('recRangeSub').textContent='ATR+BB平均 (実計算)';
+            document.getElementById('calcSrc').textContent=
+              '✓ 実計算: ATR14(日足 Wilder) $'+Math.round(atr).toLocaleString()
+              +' / BB(1h,20,2σ) '+fmtUSD(b.low)+'–'+fmtUSD(b.high)
+              +' / 出所 Binance API (閲覧ブラウザ取得)';
+          })
+          .catch(e=>{
+            const atrLo=price-atr, atrHi=price+atr;
+            updateBar(price,atrLo,atrHi,price-atr*0.7,price+atr*0.7);
+            document.getElementById('calcSrc').textContent='△ ATR14は実計算 $'+Math.round(atr).toLocaleString()+' / BB(1h)取得失敗('+e.message+')→ATR帯のみ実値';
+          });
       })
       .catch(e=>{
-        render(fallbackCandles(),'⚠ Binance取得失敗('+e.message+') → 近似補間で表示');
+        renderChart(fallbackCandles(),'⚠ Binance取得失敗('+e.message+') → 近似補間で表示');
+        document.getElementById('calcSrc').textContent='⚠ Binance取得失敗 → ATR14/BBは生成時推定値のまま (実計算不可)';
       });
+
+    // 2) Fear & Greed (alternative.me)
+    fetch('https://api.alternative.me/fng/?limit=2')
+      .then(r=>r.ok?r.json():Promise.reject(new Error('HTTP '+r.status)))
+      .then(j=>{
+        const cur=j.data[0], prev=j.data[1];
+        const v=+cur.value, cls=cur.value_classification;
+        const color = v<25?['bg-red-100','text-red-900']:v<45?['bg-amber-100','text-amber-900']:v<55?['bg-gray-200','text-gray-800']:v<75?['bg-blue-100','text-blue-900']:['bg-green-100','text-green-900'];
+        const badge=document.getElementById('fgBadge');
+        badge.className='text-xs px-2 py-1 rounded '+color[0]+' '+color[1];
+        badge.textContent='F&G '+v+' '+cls;
+        document.getElementById('fgCell').textContent=v+' '+cls;
+        document.getElementById('fgPrev').textContent='前日 '+prev.value;
+      })
+      .catch(()=>{ /* 生成時の近似値を維持 */ });
+
+    // 3) 時価総額 + BTCドミナンス (CoinGecko)
+    fetch('https://api.coingecko.com/api/v3/global')
+      .then(r=>r.ok?r.json():Promise.reject(new Error('HTTP '+r.status)))
+      .then(j=>{
+        const d=j.data;
+        const mcap=d.total_market_cap.usd, dom=d.market_cap_percentage.btc;
+        document.getElementById('mcapCell').textContent='$'+(mcap/1e12).toFixed(2)+'T';
+        document.getElementById('domCell').textContent=dom.toFixed(1)+'%';
+      })
+      .catch(()=>{ /* 生成時の近似値を維持 */ });
   })();
   </script>
 </body>
