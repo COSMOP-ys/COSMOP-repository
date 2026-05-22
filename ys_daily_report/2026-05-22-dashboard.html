@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ys DEMA Daily 2026-05-22</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.2.1/dist/chartjs-chart-financial.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/luxon/3.4.4/luxon.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #1a1a1a; color: #e5e5e5; }
+    .card { background: #2a2a2a; border-color: #3a3a3a; }
+    .muted { color: #999; }
+  }
+  @media (prefers-color-scheme: light) {
+    body { background: #fafaf8; color: #1a1a1a; }
+    .card { background: #ffffff; border-color: #e5e5e0; }
+    .muted { color: #666; }
+  }
+</style>
+</head>
+<body class="p-6 max-w-5xl mx-auto">
+
+  <!-- データ制約バナー -->
+  <div class="rounded-lg p-3 mb-4 border bg-amber-50 text-amber-900 text-xs">
+    ⚠️ <strong>データ制約</strong>: 取引所直API(Binance/CoinGecko)403遮断 → OHLC・Funding・OIは<strong>web検索ベース近似</strong>、ATR14/BBは推定。Google Drive承認済=過去レポート参照・<strong>予測精度トラッキング稼働</strong>。確信度 <strong>中</strong>。チャートは参考表示。
+  </div>
+
+  <!-- ヘッダー -->
+  <header class="flex justify-between items-center mb-6 flex-wrap gap-2">
+    <div>
+      <p class="text-xs muted">Ys DEMA v9.0 / 2026-05-22 (JST)</p>
+      <h1 class="text-2xl font-medium mt-1">日次レポート</h1>
+    </div>
+    <div class="flex gap-2 flex-wrap">
+      <span class="text-xs px-2 py-1 rounded bg-amber-100 text-amber-900">F&G 40 Fear</span>
+      <span class="text-xs px-2 py-1 rounded bg-green-100 text-green-900">PF 2.05 良好(BT)</span>
+      <span class="text-xs px-2 py-1 rounded bg-red-100 text-red-900">30d PF 0.53 苦戦</span>
+      <span class="text-xs px-2 py-1 rounded bg-gray-100 text-gray-900">確信度 中</span>
+    </div>
+  </header>
+
+  <!-- メトリックカード -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+    <div class="card border rounded-lg p-3"><p class="text-xs muted mb-1">BTC</p><p class="text-2xl font-medium">$77,447</p><p class="text-xs muted mt-1">-0.31% 24h</p></div>
+    <div class="card border rounded-lg p-3"><p class="text-xs muted mb-1">推奨レンジ</p><p class="text-lg font-medium">76.0–78.8K</p><p class="text-xs muted mt-1">ATR+BB平均</p></div>
+    <div class="card border rounded-lg p-3"><p class="text-xs muted mb-1">バイアス</p><p class="text-2xl font-medium">Neutral</p><p class="text-xs muted mt-1">ドル強/支持底堅 拮抗</p></div>
+    <div class="card border rounded-lg p-3"><p class="text-xs muted mb-1">ボラ予測</p><p class="text-2xl font-medium">中</p><p class="text-xs muted mt-1">24h振幅 ~2%</p></div>
+  </div>
+
+  <!-- レンジ予測バー -->
+  <h2 class="text-lg font-medium mb-2">レンジ予測</h2>
+  <div class="card border rounded-lg p-4 mb-6 relative h-24">
+    <div class="absolute top-8 left-0 right-0 h-5 bg-gray-200 rounded"></div>
+    <!-- ATR帯 -->
+    <div class="absolute top-8 h-5 rounded bg-blue-200 opacity-50" style="left: 9.1%; width: 81.7%;"></div>
+    <!-- 推奨レンジ -->
+    <div class="absolute top-8 h-5 rounded bg-green-300 opacity-60" style="left: 20.4%; width: 57.2%;"></div>
+    <!-- 現在価格マーカー -->
+    <div class="absolute top-6 w-0.5 h-9 bg-black" style="left: 50%;"></div>
+    <p class="absolute top-0 text-xs font-medium" style="left: 45%;">$77,447</p>
+    <!-- ラベル -->
+    <p class="absolute top-16 text-xs muted" style="left: 5%;">ATR-<br>$75,447</p>
+    <p class="absolute top-16 text-xs text-blue-700" style="left: 17%;">推奨-<br>$76,000</p>
+    <p class="absolute top-16 text-xs text-blue-700" style="left: 72%;">推奨+<br>$78,800</p>
+    <p class="absolute top-16 text-xs muted" style="left: 85%;">ATR+<br>$79,447</p>
+  </div>
+
+  <!-- ロウソク足チャート + 予測帯重ね描き -->
+  <h2 class="text-lg font-medium mb-2">レンジ予測 vs 実勢 (過去30日 / 近似)</h2>
+  <div class="card border rounded-lg p-3 mb-2">
+    <div style="position: relative; width: 100%; height: 380px;">
+      <canvas id="candleChart" role="img" aria-label="BTC 30日キャンドル(近似) + Claude予測帯重ね描き">BTC実勢(近似)+予測帯</canvas>
+    </div>
+  </div>
+  <div class="flex flex-wrap gap-4 justify-center mb-6 text-xs muted">
+    <span class="flex items-center gap-1"><span class="inline-block w-3 h-2" style="background:#97C459;"></span>陽線</span>
+    <span class="flex items-center gap-1"><span class="inline-block w-3 h-2" style="background:#E24B4A;"></span>陰線</span>
+    <span class="flex items-center gap-1"><span class="inline-block w-3 h-2" style="background:rgba(127,119,221,0.3);"></span>Claude予測帯</span>
+    <span class="flex items-center gap-1"><span class="inline-block w-3 h-0.5" style="background:#185FA5;"></span>予測中央 (点線)</span>
+  </div>
+
+  <!-- 予測精度トラッキング -->
+  <h2 class="text-lg font-medium mb-2">予測精度 (直近3日 5/19-5/21 ※蓄積中)</h2>
+  <div class="grid grid-cols-3 gap-3 mb-6">
+    <div class="card border rounded-lg p-3 text-center"><p class="text-xs muted">レンジ的中率</p><p class="text-2xl font-medium mt-1 text-green-700">100%</p><p class="text-xs muted mt-1">3/3 (終値が予測帯内)</p></div>
+    <div class="card border rounded-lg p-3 text-center"><p class="text-xs muted">バイアス一致</p><p class="text-2xl font-medium mt-1 text-amber-700">~67%</p><p class="text-xs muted mt-1">2/3 (残=微動Neutral圏)</p></div>
+    <div class="card border rounded-lg p-3 text-center"><p class="text-xs muted">平均誤差</p><p class="text-2xl font-medium mt-1">~$180</p><p class="text-xs muted mt-1">予測中央 vs 実終値</p></div>
+  </div>
+
+  <!-- マクロ + Crypto 2列 -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+    <div>
+      <h2 class="text-lg font-medium mb-2">マクロ (2026-05-21 close)</h2>
+      <div class="card border rounded-lg p-3"><table class="w-full text-sm">
+        <tbody>
+        <tr class="border-b"><td class="py-1 muted">S&P500</td><td class="text-right">~7,400</td><td class="text-right text-red-600 pl-2">-0.44%</td></tr>
+        <tr class="border-b"><td class="py-1 muted">Nasdaq100</td><td class="text-right">~26,090</td><td class="text-right text-red-600 pl-2">-0.7%</td></tr>
+        <tr class="border-b"><td class="py-1 muted">VIX</td><td class="text-right">16.76</td><td class="text-right text-green-600 pl-2">-3.9%</td></tr>
+        <tr class="border-b"><td class="py-1 muted">DXY</td><td class="text-right text-amber-700">99.4 ⚠</td><td class="text-right muted pl-2">4月来高</td></tr>
+        <tr class="border-b"><td class="py-1 muted">US10Y</td><td class="text-right">~4.66%</td><td class="text-right muted pl-2">横ばい</td></tr>
+        <tr class="border-b"><td class="py-1 muted">Gold</td><td class="text-right">~4,525</td><td class="text-right muted pl-2">高値圏</td></tr>
+        <tr><td class="py-1 muted">WTI</td><td class="text-right">96.82</td><td class="text-right text-green-600 pl-2">-1.47%</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <div>
+      <h2 class="text-lg font-medium mb-2">Crypto指標</h2>
+      <div class="card border rounded-lg p-3"><table class="w-full text-sm">
+        <tbody>
+        <tr class="border-b"><td class="py-1 muted">時価総額</td><td class="text-right">~$2.72T</td></tr>
+        <tr class="border-b"><td class="py-1 muted">BTC Dominance</td><td class="text-right">58.2%</td></tr>
+        <tr class="border-b"><td class="py-1 muted">Fear &amp; Greed</td><td class="text-right text-red-700">40 Fear (前日39)</td></tr>
+        <tr class="border-b"><td class="py-1 muted">BTC Funding</td><td class="text-right">負/中立</td></tr>
+        <tr class="border-b"><td class="py-1 muted">BTC OI</td><td class="text-right text-amber-700">高位 ⚠</td></tr>
+        <tr><td class="py-1 muted">ETH</td><td class="text-right">~$2,090 ($2K台)</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- 戦略パラメータ実績 -->
+  <h2 class="text-lg font-medium mb-2">戦略パラメータ実績</h2>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+    <div class="rounded-lg p-3 border bg-green-50">
+      <p class="text-xs muted mb-2 text-center">TVバックテスト (2026/02-05)</p>
+      <div class="flex justify-around text-center gap-2 flex-wrap">
+        <div><p class="text-xs muted">WR</p><p class="text-lg font-medium text-green-700">53.9%</p></div>
+        <div><p class="text-xs muted">PF</p><p class="text-lg font-medium text-green-700">2.05</p></div>
+        <div><p class="text-xs muted">Net</p><p class="text-lg font-medium text-green-700">+16.66%</p></div>
+        <div><p class="text-xs muted">OOS PF</p><p class="text-lg font-medium">1.30</p></div>
+      </div>
+    </div>
+    <div class="rounded-lg p-3 border bg-red-50">
+      <p class="text-xs muted mb-2 text-center">直近30日ローリング ⚠️</p>
+      <div class="flex justify-around text-center gap-2 flex-wrap">
+        <div><p class="text-xs muted">N</p><p class="text-lg font-medium">14</p></div>
+        <div><p class="text-xs muted">WR</p><p class="text-lg font-medium text-red-700">35.7%</p></div>
+        <div><p class="text-xs muted">PF</p><p class="text-lg font-medium text-red-700">0.53</p></div>
+        <div><p class="text-xs muted">Net</p><p class="text-lg font-medium text-red-700">-1.28%</p></div>
+        <div><p class="text-xs muted">MaxDD</p><p class="text-lg font-medium">2.04%</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 推奨パラメータ変更 -->
+  <h2 class="text-lg font-medium mb-2">推奨パラメータ変更</h2>
+  <div class="card border rounded-lg p-4 mb-4">
+    <div class="flex items-center gap-2 mb-3">
+      <span class="text-xs px-2 py-1 rounded bg-amber-100 text-amber-900">判定: N不足・現状維持</span>
+    </div>
+    <table class="w-full text-sm">
+      <thead><tr class="border-b">
+        <th class="text-left py-1 muted font-normal">項目</th>
+        <th class="text-right py-1 muted font-normal">現状</th>
+        <th class="text-center py-1 muted font-normal">→</th>
+        <th class="text-right py-1 text-blue-700 font-medium">推奨(PF top1)</th>
+        <th class="text-right py-1 muted font-normal">差分</th>
+      </tr></thead>
+      <tbody>
+        <tr><td class="py-1">ATR乗数</td><td class="text-right">1.2</td><td class="text-center muted">→</td><td class="text-right text-blue-700 font-medium">1.5</td><td class="text-right">+0.3</td></tr>
+        <tr><td class="py-1">Trail起動%</td><td class="text-right">0.1</td><td class="text-center muted">→</td><td class="text-right text-blue-700 font-medium">0.3</td><td class="text-right">+0.2</td></tr>
+        <tr><td class="py-1">CO確認</td><td class="text-right">4</td><td class="text-center muted">→</td><td class="text-right text-blue-700 font-medium">2</td><td class="text-right">-2</td></tr>
+        <tr><td class="py-1">Vol順</td><td class="text-right">1.5</td><td class="text-center muted">→</td><td class="text-right text-blue-700 font-medium">1.2</td><td class="text-right">-0.3</td></tr>
+        <tr><td class="py-1">Range閾値%</td><td class="text-right">1.2</td><td class="text-center muted">→</td><td class="text-right text-blue-700 font-medium">1.5</td><td class="text-right">+0.3</td></tr>
+        <tr class="border-t"><td class="py-2 muted">期待PF</td><td class="text-right">0.53<span class="text-xs">(30d)</span></td><td class="text-center muted">→</td><td class="text-right font-medium">2.20</td><td class="text-right text-green-700">+1.67</td></tr>
+        <tr><td class="py-1 muted">期待WR</td><td class="text-right">35.7%</td><td class="text-center muted">→</td><td class="text-right font-medium">42.9%</td><td class="text-right text-green-700">+7.2pt</td></tr>
+        <tr><td class="py-1 muted">期待Net%</td><td class="text-right">-1.28</td><td class="text-center muted">→</td><td class="text-right font-medium">+1.59</td><td class="text-right text-green-700">+2.87</td></tr>
+      </tbody>
+    </table>
+    <p class="text-xs text-red-700 mt-3">⚠ <strong>過剰最適化懸念大</strong>: PF top1案は <strong>N=7 (&lt;20)</strong>。サンプル過少につき統計的信頼性不足。本Routineでは<strong>変更しない</strong>。最適化は週次PCローカル(1年データ)で別途検証推奨。</p>
+    <div class="flex gap-2 mt-3 flex-wrap">
+      <button onclick="sendPrompt('推奨パラメータの根拠と過剰最適化リスクを詳しく')" class="text-xs px-3 py-1.5 rounded bg-blue-100 text-blue-900 hover:bg-blue-200">根拠詳細 ↗</button>
+      <button onclick="sendPrompt('週次PCローカル最適化結果を反映')" class="text-xs px-3 py-1.5 rounded bg-gray-100 text-gray-900 hover:bg-gray-200">週次結果取込 ↗</button>
+    </div>
+  </div>
+
+  <!-- アクション -->
+  <h2 class="text-lg font-medium mb-2">アクション</h2>
+  <div class="card border rounded-lg p-4 mb-4">
+    <div class="flex flex-wrap gap-2 mb-2">
+      <span class="text-xs px-2 py-1 rounded bg-amber-100 text-amber-900">⚠ サイズ50%抑制 (継続)</span>
+      <span class="text-xs px-2 py-1 rounded bg-green-100 text-green-900">レンジ環境=mean reversion追い風</span>
+    </div>
+    <p class="text-sm mt-2"><strong>注目価格:</strong> 下 $76,300 (週安値) / $76,000 (鉄板支持・割れ→$74,500) ・ 上 $78,100 (BB上限) / $78,800 (推奨上限・超え→$80,000)</p>
+    <p class="text-sm mt-1"><strong>警戒:</strong> 30d PF 0.53苦戦継続、BTC OI高位=清算カスケード、月間-4%基調で$76K割れ=±10%トレンド月危険域、米イラン和平続報でオイル/DXY急変。マクロイベント前後は予測誤差大。</p>
+  </div>
+
+  <footer class="text-xs muted text-center mt-6">
+    自動生成 by Claude.ai Routine / Ys Daily Report v1.0<br>
+    分析支援のみ・投資助言ではない / 確信度 中 (Drive参照可・取引所API遮断で機械値推定)
+  </footer>
+
+  <!-- sendPrompt ヘルパー (ホスト環境へのブリッジ、未対応時は無害フォールバック) -->
+  <script>
+  function sendPrompt(p){
+    try{
+      if(window.parent&&window.parent!==window){window.parent.postMessage({type:'sendPrompt',prompt:p},'*');}
+      else if(navigator.clipboard){navigator.clipboard.writeText(p);alert('プロンプトをコピー: '+p);}
+      else{alert(p);}
+    }catch(e){alert(p);}
+  }
+  </script>
+
+  <!-- キャンドルチャートJS -->
+  <script>
+  (function(){
+    // ⚠ 取引所API遮断のため、主要アンカー終値間を補間した近似OHLC。実勢精密値ではない。
+    const anchors = [
+      [2026,4,22,75000],[2026,4,25,76500],[2026,4,28,78000],[2026,5,1,79000],
+      [2026,5,4,80200],[2026,5,6,81000],[2026,5,9,80000],[2026,5,12,79500],
+      [2026,5,14,78800],[2026,5,16,78600],[2026,5,18,78400],[2026,5,19,76952],
+      [2026,5,20,77200],[2026,5,21,77350],[2026,5,22,77447]
+    ];
+    function interpClose(y,m,d){
+      const t = Date.UTC(y,m-1,d);
+      const ts = anchors.map(a=>[Date.UTC(a[0],a[1]-1,a[2]),a[3]]);
+      if(t<=ts[0][0]) return ts[0][1];
+      if(t>=ts[ts.length-1][0]) return ts[ts.length-1][1];
+      for(let i=0;i<ts.length-1;i++){
+        if(t>=ts[i][0]&&t<=ts[i+1][0]){
+          const f=(t-ts[i][0])/(ts[i+1][0]-ts[i][0]);
+          return Math.round(ts[i][1]+f*(ts[i+1][1]-ts[i][1]));
+        }
+      }
+      return ts[ts.length-1][1];
+    }
+    const candleData=[];
+    let prevC=null;
+    for(let i=29;i>=0;i--){
+      const dt=new Date(Date.UTC(2026,4,22)-i*86400000); // 2026-05-22 origin
+      const y=dt.getUTCFullYear(),m=dt.getUTCMonth()+1,d=dt.getUTCDate();
+      const c=interpClose(y,m,d);
+      const o=prevC!==null?prevC:Math.round(c*0.997);
+      const hi=Math.round(Math.max(o,c)*1.008);
+      const lo=Math.round(Math.min(o,c)*0.992);
+      candleData.push({x:dt.getTime(),o:o,h:hi,l:lo,c:c});
+      prevC=c;
+    }
+
+    // Claude予測帯: 過去レポート(Drive)から抽出した4日分
+    const predData=[
+      {x:Date.UTC(2026,4,19),low:76000,high:78500,mid:77250},
+      {x:Date.UTC(2026,4,20),low:75800,high:78600,mid:77200},
+      {x:Date.UTC(2026,4,21),low:75300,high:79900,mid:77600},
+      {x:Date.UTC(2026,4,22),low:76000,high:78800,mid:77400}
+    ];
+
+    const ctx=document.getElementById('candleChart').getContext('2d');
+    new Chart(ctx,{
+      type:'candlestick',
+      data:{datasets:[
+        {type:'line',label:'予測上限',data:predData.map(p=>({x:p.x,y:p.high})),borderColor:'rgba(127,119,221,0.4)',backgroundColor:'rgba(127,119,221,0.15)',borderWidth:1,pointRadius:0,fill:'+1',tension:0.3,order:3},
+        {type:'line',label:'予測下限',data:predData.map(p=>({x:p.x,y:p.low})),borderColor:'rgba(127,119,221,0.4)',backgroundColor:'transparent',borderWidth:1,pointRadius:0,tension:0.3,order:3},
+        {type:'line',label:'予測中央',data:predData.map(p=>({x:p.x,y:p.mid})),borderColor:'#185FA5',backgroundColor:'transparent',borderWidth:1.5,pointRadius:3,borderDash:[4,3],tension:0.3,order:2},
+        {label:'BTC',data:candleData,borderColor:{up:'#3B6D11',down:'#A32D2D',unchanged:'#888780'},color:{up:'#97C459',down:'#E24B4A',unchanged:'#B4B2A9'},order:1}
+      ]},
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        interaction:{mode:'index',intersect:false},
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:function(ctx){
+          const ds=ctx.dataset.label;
+          if(ds==='BTC'){const d=ctx.raw;return ['O: $'+Math.round(d.o).toLocaleString(),'H: $'+Math.round(d.h).toLocaleString(),'L: $'+Math.round(d.l).toLocaleString(),'C: $'+Math.round(d.c).toLocaleString()];}
+          return ds+': $'+Math.round(ctx.parsed.y).toLocaleString();
+        }}}},
+        scales:{
+          x:{type:'time',time:{unit:'day',displayFormats:{day:'M/d'}},ticks:{color:'#888780',font:{size:10},maxTicksLimit:10},grid:{color:'rgba(136,135,128,0.1)'}},
+          y:{ticks:{color:'#888780',font:{size:10},callback:v=>'$'+(v/1000).toFixed(1)+'K'},grid:{color:'rgba(136,135,128,0.1)'}}
+        }
+      }
+    });
+  })();
+  </script>
+</body>
+</html>
