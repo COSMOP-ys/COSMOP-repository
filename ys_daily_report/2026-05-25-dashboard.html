@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ys DEMA Daily 2026-05-25</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.2.1/dist/chartjs-chart-financial.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/luxon/3.4.4/luxon.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #1a1a1a; color: #e5e5e5; }
+    .card { background: #2a2a2a; border-color: #3a3a3a; }
+    .muted { color: #999; }
+    table { color: #e5e5e5; }
+  }
+  @media (prefers-color-scheme: light) {
+    body { background: #fafaf8; color: #1a1a1a; }
+    .card { background: #ffffff; border-color: #e5e5e0; }
+    .muted { color: #666; }
+  }
+  .delta-pos { color: #15803d; }
+  .delta-neg { color: #b91c1c; }
+</style>
+</head>
+<body class="p-6 max-w-5xl mx-auto">
+
+  <!-- データ制約バナー -->
+  <div class="rounded-lg p-3 mb-4 border bg-amber-50 text-amber-900 text-xs">
+    ⚠️ <strong>データ制約</strong>: 取引所API遮断継続でOHLCは<strong>Web検索ベース近似値</strong>。複数情報源クロスチェック済。<strong>確信度: 中</strong>。
+  </div>
+
+  <!-- ヘッダー -->
+  <header class="flex justify-between items-center mb-6 flex-wrap gap-2">
+    <div>
+      <p class="text-xs muted">Ys DEMA v9.0 / 2026-05-25 (JST)</p>
+      <h1 class="text-2xl font-medium mt-1">日次レポート</h1>
+    </div>
+    <div class="flex gap-2 flex-wrap">
+      <span class="text-xs px-2 py-1 rounded bg-amber-100 text-amber-900">F&G 40 Fear</span>
+      <span class="text-xs px-2 py-1 rounded bg-green-100 text-green-900">PF 2.05 良好</span>
+      <span class="text-xs px-2 py-1 rounded bg-blue-100 text-blue-900">確信度 中</span>
+    </div>
+  </header>
+
+  <!-- メトリックカード -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+    <div class="card border rounded-lg p-3">
+      <p class="text-xs muted mb-1">BTC</p>
+      <p class="text-2xl font-medium">$76,988</p>
+      <p class="text-xs delta-pos mt-1">+0.34% 24h</p>
+    </div>
+    <div class="card border rounded-lg p-3">
+      <p class="text-xs muted mb-1">推奨レンジ</p>
+      <p class="text-lg font-medium">75.6–78.1K</p>
+      <p class="text-xs muted mt-1">ATR+BB平均</p>
+    </div>
+    <div class="card border rounded-lg p-3">
+      <p class="text-xs muted mb-1">バイアス</p>
+      <p class="text-2xl font-medium">Neutral</p>
+      <p class="text-xs muted mt-1">追い風/逆風拮抗</p>
+    </div>
+    <div class="card border rounded-lg p-3">
+      <p class="text-xs muted mb-1">ボラ予測</p>
+      <p class="text-2xl font-medium">中</p>
+      <p class="text-xs muted mt-1">24h振幅 1.5%</p>
+    </div>
+  </div>
+
+  <!-- レンジ予測バー -->
+  <h2 class="text-lg font-medium mb-2">レンジ予測</h2>
+  <div class="card border rounded-lg p-4 mb-6 relative h-32">
+    <!-- 帯背景 -->
+    <div class="absolute top-10 left-0 right-0 h-5 bg-gray-200 rounded"></div>
+    <!-- ATR帯 (青、薄) 全幅 -->
+    <div class="absolute top-10 h-5 rounded bg-blue-200 opacity-50" style="left: 0%; width: 100%;"></div>
+    <!-- 推奨レンジ (緑、濃) 11%-81% -->
+    <div class="absolute top-10 h-5 rounded bg-green-300 opacity-70" style="left: 11%; width: 70%;"></div>
+    <!-- 現在価格マーカー -->
+    <div class="absolute top-7 w-0.5 h-11 bg-black dark:bg-white" style="left: 50%;"></div>
+    <p class="absolute top-1 text-xs font-medium" style="left: 44%;">$76,988</p>
+    <!-- 各レベルのラベル -->
+    <p class="absolute top-20 text-xs muted" style="left: 0%;">ATR-<br>$75,200</p>
+    <p class="absolute top-20 text-xs text-green-700" style="left: 14%;">推奨-<br>$75,600</p>
+    <p class="absolute top-20 text-xs text-green-700" style="left: 70%;">推奨+<br>$78,100</p>
+    <p class="absolute top-20 text-xs muted" style="right: 0%;">ATR+<br>$78,800</p>
+  </div>
+
+  <!-- マクロ + Crypto 2列 -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+    <div>
+      <h2 class="text-lg font-medium mb-2">マクロ (2026-05-22 close)</h2>
+      <div class="card border rounded-lg p-3">
+        <table class="w-full text-sm">
+          <tr><td class="muted py-1">S&P500</td><td class="text-right">7,473.47</td><td class="text-right delta-pos pl-2">+0.37%</td></tr>
+          <tr><td class="muted py-1">Nasdaq</td><td class="text-right">26,343.97</td><td class="text-right delta-pos pl-2">+0.19%</td></tr>
+          <tr><td class="muted py-1">VIX</td><td class="text-right">16.70</td><td class="text-right delta-neg pl-2">-0.36%</td></tr>
+          <tr><td class="muted py-1">DXY</td><td class="text-right">99.3</td><td class="text-right delta-pos pl-2">6週高</td></tr>
+          <tr><td class="muted py-1">US10Y</td><td class="text-right">4.57%</td><td class="text-right delta-neg pl-2">↓微</td></tr>
+          <tr><td class="muted py-1">Gold</td><td class="text-right">4,523.20</td><td class="text-right delta-neg pl-2">-0.42%</td></tr>
+          <tr><td class="muted py-1">WTI</td><td class="text-right">~$80</td><td class="text-right muted pl-2">地政学</td></tr>
+        </table>
+      </div>
+    </div>
+    <div>
+      <h2 class="text-lg font-medium mb-2">Crypto指標</h2>
+      <div class="card border rounded-lg p-3">
+        <table class="w-full text-sm">
+          <tr><td class="muted py-1">時価総額</td><td class="text-right">$2.60T</td></tr>
+          <tr><td class="muted py-1">BTC.D</td><td class="text-right">58.0%</td></tr>
+          <tr><td class="muted py-1">F&G</td><td class="text-right">40 Fear (前日38)</td></tr>
+          <tr><td class="muted py-1">BTC Funding</td><td class="text-right">小幅マイナス</td></tr>
+          <tr><td class="muted py-1">BTC OI</td><td class="text-right">~$61.6B</td></tr>
+          <tr><td class="muted py-1">ETH</td><td class="text-right">$2,101 <span class="delta-pos">+1.99%</span></td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ロウソク足チャート (Step 9-1) -->
+  <h2 class="text-lg font-medium mb-2">BTC日足30本 + 予測帯</h2>
+  <div class="card border rounded-lg p-3 mb-6">
+    <canvas id="btcChart" height="120"></canvas>
+    <p class="text-xs muted mt-2">凡例: ロウソク=日足OHLC(近似)・緑帯=Claude予測上下限・点線=予測中央 / API遮断のためOHLC値はWeb検索アンカー間の補間近似</p>
+  </div>
+
+  <!-- 予測精度トラッキング (Step 9-2) -->
+  <h2 class="text-lg font-medium mb-2">予測精度トラッキング (直近レポート)</h2>
+  <div class="grid grid-cols-3 gap-3 mb-6">
+    <div class="card border rounded-lg p-3 text-center">
+      <p class="text-xs muted mb-1">レンジ的中率</p>
+      <p class="text-2xl font-medium">1/1</p>
+      <p class="text-xs muted mt-1">(N=1, 初期)</p>
+    </div>
+    <div class="card border rounded-lg p-3 text-center">
+      <p class="text-xs muted mb-1">バイアス一致率</p>
+      <p class="text-2xl font-medium">1/1</p>
+      <p class="text-xs muted mt-1">Neutral-適中</p>
+    </div>
+    <div class="card border rounded-lg p-3 text-center">
+      <p class="text-xs muted mb-1">平均誤差 (中央vs実勢)</p>
+      <p class="text-2xl font-medium">$612</p>
+      <p class="text-xs muted mt-1">~0.8%</p>
+    </div>
+  </div>
+
+  <!-- 戦略パラメータ -->
+  <h2 class="text-lg font-medium mb-2">戦略パラメータ (直近30日 / TVバックテスト)</h2>
+  <div class="rounded-lg p-3 mb-6 border bg-green-50">
+    <div class="flex justify-around text-center gap-2 flex-wrap">
+      <div><p class="text-xs muted">N</p><p class="text-lg font-medium">参考</p></div>
+      <div><p class="text-xs muted">WR</p><p class="text-lg font-medium">53.9%</p></div>
+      <div><p class="text-xs muted">PF</p><p class="text-lg font-medium text-green-700">2.05</p></div>
+      <div><p class="text-xs muted">Net</p><p class="text-lg font-medium delta-pos">+16.66%</p></div>
+      <div><p class="text-xs muted">MaxDD</p><p class="text-lg font-medium">~5%</p></div>
+    </div>
+    <p class="text-xs muted text-center mt-2">2026/02–05 (TradingViewバックテスト実績)</p>
+  </div>
+
+  <!-- 推奨パラメータテーブル (Step 9-3) -->
+  <h2 class="text-lg font-medium mb-2">推奨パラメータ</h2>
+  <div class="card border rounded-lg p-3 mb-6">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b">
+          <th class="text-left py-1">項目</th>
+          <th class="text-right">現状</th>
+          <th class="text-center">→</th>
+          <th class="text-right">推奨</th>
+          <th class="text-right">差分</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="py-1">ATR乗数</td><td class="text-right">1.2</td><td class="text-center muted">→</td><td class="text-right">1.2</td><td class="text-right muted">±0</td></tr>
+        <tr><td class="py-1">Trail起動</td><td class="text-right">0.1%</td><td class="text-center muted">→</td><td class="text-right">0.1%</td><td class="text-right muted">±0</td></tr>
+        <tr><td class="py-1">CO</td><td class="text-right">4</td><td class="text-center muted">→</td><td class="text-right">4</td><td class="text-right muted">±0</td></tr>
+        <tr><td class="py-1">Vol順</td><td class="text-right">1.5</td><td class="text-center muted">→</td><td class="text-right">1.5</td><td class="text-right muted">±0</td></tr>
+        <tr><td class="py-1">Vol逆</td><td class="text-right">2.5</td><td class="text-center muted">→</td><td class="text-right">2.5</td><td class="text-right muted">±0</td></tr>
+        <tr><td class="py-1">SMA</td><td class="text-right">30</td><td class="text-center muted">→</td><td class="text-right">30</td><td class="text-right muted">±0</td></tr>
+        <tr><td class="py-1">Range閾値</td><td class="text-right">1.2%</td><td class="text-center muted">→</td><td class="text-right">1.2%</td><td class="text-right muted">±0</td></tr>
+        <tr class="border-t"><td class="py-1">期待PF</td><td class="text-right">2.05</td><td class="text-center muted">→</td><td class="text-right">2.05</td><td class="text-right muted">±0</td></tr>
+        <tr><td class="py-1">期待WR</td><td class="text-right">53.9%</td><td class="text-center muted">→</td><td class="text-right">53.9%</td><td class="text-right muted">±0pt</td></tr>
+        <tr><td class="py-1">期待Net%</td><td class="text-right">+16.66%</td><td class="text-center muted">→</td><td class="text-right">+16.66%</td><td class="text-right muted">±0</td></tr>
+      </tbody>
+    </table>
+    <div class="mt-3 p-2 bg-amber-100 text-amber-900 text-xs rounded">
+      ⚠️ <strong>現状維持推奨</strong>: 直近30日トレードログ N<20 (実環境未稼働) につき過剰最適化懸念大。<strong>週次PCローカル検証推奨</strong>。低ボラレンジ環境=現状パラメータは適合。
+    </div>
+    <div class="mt-2 flex gap-2 flex-wrap">
+      <a href="#" onclick="alert('推奨パラメータの根拠と過剰最適化リスクを詳しく — Claudeに問い合わせ');return false;" class="text-xs px-2 py-1 rounded bg-blue-100 text-blue-900 hover:bg-blue-200">根拠詳細 ↗</a>
+      <a href="#" onclick="alert('週次PCローカル最適化結果を反映 — Claudeに問い合わせ');return false;" class="text-xs px-2 py-1 rounded bg-green-100 text-green-900 hover:bg-green-200">週次結果取込 ↗</a>
+    </div>
+  </div>
+
+  <!-- アクション -->
+  <h2 class="text-lg font-medium mb-2">アクション</h2>
+  <div class="card border rounded-lg p-4 mb-4">
+    <div class="flex flex-wrap gap-2 mb-2">
+      <span class="text-xs px-2 py-1 rounded bg-green-100 text-green-900">✓ 通常運用</span>
+      <span class="text-xs px-2 py-1 rounded bg-amber-100 text-amber-900">⚠ 5/28 PCE前は要警戒</span>
+    </div>
+    <p class="text-sm mt-2"><strong>注目価格:</strong> 下 $76,053 / $75,200 / 上 $77,216 / $78,100 / $78,800</p>
+    <p class="text-sm mt-1"><strong>警戒:</strong> 5/28 米GDP・PCE (21:30 JST)、地政学 (イラン・原油)、Funding踏み上げ余地</p>
+  </div>
+
+  <footer class="text-xs muted text-center mt-6">
+    自動生成 by Claude.ai Routine / Ys Daily Report v1.0<br>
+    分析支援のみ・投資助言ではない
+  </footer>
+
+  <script>
+    // 30日OHLC近似 (Web検索アンカー間補間: 2026/04-26 ~ 2026/05/25)
+    // 主要アンカー: 5/06 $81,000, 5/14 $80,148, 5/21 $77,687, 5/25 $76,988
+    const ohlcData = [
+      {x:'2026-04-26', o:78500, h:79200, l:77800, c:78900},
+      {x:'2026-04-27', o:78900, h:79800, l:78400, c:79500},
+      {x:'2026-04-28', o:79500, h:80400, l:79100, c:80200},
+      {x:'2026-04-29', o:80200, h:81000, l:79700, c:80700},
+      {x:'2026-04-30', o:80700, h:81300, l:80100, c:80500},
+      {x:'2026-05-01', o:80500, h:81200, l:79800, c:80100},
+      {x:'2026-05-02', o:80100, h:80800, l:79400, c:80400},
+      {x:'2026-05-03', o:80400, h:81100, l:79900, c:80600},
+      {x:'2026-05-04', o:80600, h:81400, l:80200, c:80900},
+      {x:'2026-05-05', o:80900, h:81700, l:80500, c:81200},
+      {x:'2026-05-06', o:81200, h:81800, l:80600, c:81000},
+      {x:'2026-05-07', o:81000, h:81500, l:80100, c:80400},
+      {x:'2026-05-08', o:80400, h:80900, l:79700, c:80100},
+      {x:'2026-05-09', o:80100, h:80600, l:79500, c:79900},
+      {x:'2026-05-10', o:79900, h:80700, l:79400, c:80300},
+      {x:'2026-05-11', o:80300, h:80800, l:79800, c:80500},
+      {x:'2026-05-12', o:80500, h:81100, l:80000, c:80700},
+      {x:'2026-05-13', o:80700, h:81200, l:80100, c:80400},
+      {x:'2026-05-14', o:80400, h:80900, l:79800, c:80148},
+      {x:'2026-05-15', o:80148, h:80700, l:79400, c:79600},
+      {x:'2026-05-16', o:79600, h:80100, l:78900, c:79200},
+      {x:'2026-05-17', o:79200, h:79800, l:78500, c:78800},
+      {x:'2026-05-18', o:78800, h:79300, l:78100, c:78400},
+      {x:'2026-05-19', o:78400, h:78900, l:77600, c:77900},
+      {x:'2026-05-20', o:77900, h:78500, l:77100, c:77800},
+      {x:'2026-05-21', o:77800, h:78400, l:77200, c:77687},
+      {x:'2026-05-22', o:77687, h:78200, l:76900, c:77300},
+      {x:'2026-05-23', o:77300, h:77800, l:76500, c:76900},
+      {x:'2026-05-24', o:76900, h:77400, l:76300, c:76700},
+      {x:'2026-05-25', o:76700, h:77216, l:76053, c:76988}
+    ];
+
+    // Claude予測帯 (現時点では2026-05-21と2026-05-25のみ実データ)
+    const predBandData = [
+      {x:'2026-05-21', low:75300, high:79900, mid:77600},
+      {x:'2026-05-25', low:75600, high:78100, mid:76850}
+    ];
+
+    const ctx = document.getElementById('btcChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'candlestick',
+      data: {
+        datasets: [
+          {
+            label: 'BTCUSDT 日足',
+            data: ohlcData.map(d => ({x: new Date(d.x).valueOf(), o:d.o, h:d.h, l:d.l, c:d.c})),
+            color: {
+              up: '#15803d',
+              down: '#b91c1c',
+              unchanged: '#999'
+            }
+          },
+          {
+            label: '予測上限',
+            type: 'line',
+            data: predBandData.map(d => ({x: new Date(d.x).valueOf(), y: d.high})),
+            borderColor: 'rgba(34,197,94,0.6)',
+            backgroundColor: 'rgba(34,197,94,0.15)',
+            fill: '+1',
+            pointRadius: 3,
+            borderWidth: 1
+          },
+          {
+            label: '予測下限',
+            type: 'line',
+            data: predBandData.map(d => ({x: new Date(d.x).valueOf(), y: d.low})),
+            borderColor: 'rgba(34,197,94,0.6)',
+            backgroundColor: 'rgba(34,197,94,0.15)',
+            pointRadius: 3,
+            borderWidth: 1
+          },
+          {
+            label: '予測中央',
+            type: 'line',
+            data: predBandData.map(d => ({x: new Date(d.x).valueOf(), y: d.mid})),
+            borderColor: 'rgba(59,130,246,0.8)',
+            borderDash: [4, 4],
+            pointRadius: 2,
+            borderWidth: 1.5,
+            fill: false
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { font: { size: 10 } } },
+          tooltip: { mode: 'index', intersect: false }
+        },
+        scales: {
+          x: { type: 'time', time: { unit: 'day' }, ticks: { font: { size: 9 } } },
+          y: { ticks: { font: { size: 9 }, callback: v => '$'+(v/1000).toFixed(1)+'K' } }
+        }
+      }
+    });
+  </script>
+</body>
+</html>
