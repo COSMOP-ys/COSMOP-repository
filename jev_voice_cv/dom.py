@@ -63,15 +63,16 @@ _JA_STOPWORDS = frozenset(
     この その あの どの ここ そこ どこ もの ほう ため
     """.split()
 )
-# Operation verbs, the same trade the English list makes: a word like 削除 is
-# both "the act of deleting" and half the label on the delete button. Dropping
-# it costs a little recall on the label and buys not matching every button
-# whenever someone says the verb.
+# Only the words that name the gesture and never appear on a control. A verb
+# that does appear on labels needs no help from this list: it will have a low
+# idf on a page where every button carries it, and a high one on a page where
+# exactly one does - which is the answer we want. Dropping such a word instead
+# is actively harmful. 保存 was in this list, and "保存ボタンを押して" then
+# tokenised to nothing but `button`, so every button tied and the first one in
+# the document won. Keep it short.
 _JA_VERBS = frozenset(
     """
-    押し 押す 押して クリック タップ 選択 選ん 開い 開く 閉じ 閉じる スクロール
-    移動 表示 見せ 教え 削除 消し 消す 入力 打ち 打つ 書い 書く 記入 保存
-    ハイライト 強調 探し 探す 見つけ 支払 購入
+    押し 押す 押して クリック タップ スクロール ハイライト
     """.split()
 )
 

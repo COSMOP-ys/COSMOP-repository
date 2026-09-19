@@ -50,6 +50,8 @@
   ol { margin: 0; padding-left: 20px; font-size: 13px; color: var(--muted); }
   #spacer { height: 900px; }
   .hint { color: var(--muted); font-size: 13px; margin: 0; }
+  .heard { font-size: 19px; min-height: 1.4em; }
+  .heard.partial { color: var(--muted); font-style: italic; }
 </style>
 </head>
 <body>
@@ -77,6 +79,12 @@
              placeholder="…or type here: each keystroke streams as a partial" />
       <button type="submit">End of utterance</button>
     </form>
+  </section>
+
+  <section class="panel">
+    <h2>Heard</h2>
+    <div id="heard" class="heard">—</div>
+    <div class="meta" id="heardnote"></div>
   </section>
 
   <section class="panel">
@@ -193,6 +201,7 @@ let inFlight = 0;
 
 async function send(text, final) {
   const mine = ++inFlight;
+  heard(text, final);
   let plan;
   try {
     const response = await fetch('/resolve', {
@@ -227,6 +236,16 @@ function fail(text, final, detail) {
   // Give the words back rather than swallowing them.
   const input = el('transcript');
   if (final && !input.value) input.value = text;
+}
+
+function heard(text, final) {
+  // Without this the page cannot distinguish "the model did not understand"
+  // from "the microphone heard something else entirely", which are fixed in
+  // completely different places.
+  const box = el('heard');
+  box.textContent = text || '—';
+  box.className = 'heard' + (final ? '' : ' partial');
+  el('heardnote').textContent = final ? 'final' : 'still speaking…';
 }
 
 function render(plan, text) {

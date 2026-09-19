@@ -198,5 +198,27 @@ class MalformedSnapshotTest(unittest.TestCase):
         self.assertIsNone(only.box)
 
 
+class LabelWordsAreNotVerbsTest(unittest.TestCase):
+    """A word that appears on a control must not be thrown away as a gesture.
+
+    保存 was in the verb stoplist, so "保存ボタンを押して" reduced to nothing but
+    `button`, every button tied, and the first one in the document won - which
+    was the delete button. idf already handles the case the stoplist was meant
+    to cover: a word every control carries scores low by itself.
+    """
+
+    def test_a_verb_that_is_also_a_label_still_targets(self):
+        [best, *_] = ja_grounder().ground("保存ボタンを押して")
+        self.assertEqual(best.ref, "j1")
+
+    def test_the_same_holds_for_delete(self):
+        self.assertEqual(ja_grounder().ground("削除して")[0].ref, "j0")
+
+    def test_a_pure_gesture_word_still_contributes_nothing(self):
+        # クリック appears on no control here, so it must not decide anything.
+        self.assertNotIn("クリック", content_tokens("キャンセルをクリック"))
+        self.assertEqual(ja_grounder().ground("キャンセルをクリック")[0].ref, "j2")
+
+
 if __name__ == "__main__":
     unittest.main()

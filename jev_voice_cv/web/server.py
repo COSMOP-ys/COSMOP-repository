@@ -54,8 +54,9 @@ class OfflineChooser:
                               "ハイライト", "どこ"),
         "open_app": ("open", "launch", "switch to",
                      "開い", "起動", "切り替"),
-        "click_element": ("click", "press", "tap", "push", "hit",
-                          "クリック", "押し", "押して", "タップ"),
+        "click_element": ("click", "press", "tap", "push", "hit", "submit", "save",
+                          "クリック", "押し", "押して", "タップ",
+                          "保存", "セーブ", "決定", "送信", "実行", "選択", "選ん"),
         "type_text": ("type", "enter", "write", "put",
                       "入力", "打って", "書いて"),
         "create_note": ("note", "jot", "メモ"),
@@ -82,9 +83,17 @@ class OfflineChooser:
         return answers
 
     def _pick(self, text: str, options: Sequence[str]) -> Decision:
-        hits = [o for o in options if any(cue in text for cue in self._CUES.get(o, ()))]
+        # Longest cue wins, not first-listed. "スクロールして保存を押して" matches two
+        # actions, and answering with whichever happens to come first in the
+        # action list is a coin toss dressed up as a decision.
+        hits = [
+            (len(cue), o)
+            for o in options
+            for cue in self._CUES.get(o, ())
+            if cue in text
+        ]
         if hits:
-            winner = hits[0]
+            winner = max(hits)[1]
         elif NO_ACTION in options:
             winner = NO_ACTION
         else:
