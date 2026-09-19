@@ -41,19 +41,32 @@ class OfflineChooser:
     executing - without a dependency on anything remote. Its confidences are
     made up, which is precisely why the real thing is worth measuring: swap in
     `GatewayJev` and the numbers stop being fiction.
+
+    The cue lists carry Japanese as well as English. Jev itself needs none of
+    this - it reads Japanese transcripts against these same English action
+    descriptions - but a keyword stub is only as multilingual as its keywords.
     """
 
     _CUES: Mapping[str, tuple[str, ...]] = {
-        "scroll_to_element": ("scroll", "show me", "go to", "find"),
-        "highlight_element": ("highlight", "point at", "point out", "where is"),
-        "open_app": ("open", "launch", "switch to"),
-        "click_element": ("click", "press", "tap", "push", "hit"),
-        "type_text": ("type", "enter", "write", "put"),
-        "create_note": ("note", "jot"),
-        "delete_element": ("delete", "remove", "discard"),
-        "submit_payment": ("pay", "purchase", "buy"),
+        "scroll_to_element": ("scroll", "show me", "go to", "find",
+                              "スクロール", "まで移動"),
+        "highlight_element": ("highlight", "point at", "point out", "where is",
+                              "ハイライト", "どこ"),
+        "open_app": ("open", "launch", "switch to",
+                     "開い", "起動", "切り替"),
+        "click_element": ("click", "press", "tap", "push", "hit",
+                          "クリック", "押し", "押して", "タップ"),
+        "type_text": ("type", "enter", "write", "put",
+                      "入力", "打って", "書いて"),
+        "create_note": ("note", "jot", "メモ"),
+        "delete_element": ("delete", "remove", "discard",
+                           "削除", "消し", "取り消"),
+        "submit_payment": ("pay", "purchase", "buy", "支払", "購入"),
     }
-    _NOT_A_COMMAND = ("i told", "he said", "she said", "they said", "anyway", "by the way")
+    _NOT_A_COMMAND = (
+        "i told", "he said", "she said", "they said", "anyway", "by the way",
+        "って言っ", "と言っ", "そういえば", "ちなみに",
+    )
 
     def evaluate(
         self, *, state: Mapping[str, Any], questions: Mapping[str, Question]

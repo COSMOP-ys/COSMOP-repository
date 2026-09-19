@@ -105,5 +105,98 @@ class DomPipelineTest(unittest.TestCase):
         self.assertIs(plan.kind, PlanKind.CONFIRM)
 
 
+JA_NODES = [
+    DomNode("j0", role="button", name="アカウントを削除",
+            attrs={"colour": "red"}),
+    DomNode("j1", role="button", name="変更を保存",
+            attrs={"colour": "green"}),
+    DomNode("j2", role="button", name="キャンセル",
+            attrs={"colour": "grey"}),
+    DomNode("j3", role="textbox", name="メールアドレス",
+            attrs={"placeholder": "you@example.com"}),
+    DomNode("j4", role="link", name="ドキュメントを読む"),
+]
+
+
+def ja_grounder(**kwargs) -> DomGrounder:
+    return DomGrounder(lambda: JA_NODES, **kwargs)
+
+
+class JapaneseTokenTest(unittest.TestCase):
+    """Japanese writes no spaces, so the script boundaries are the segmentation."""
+
+    def test_a_sentence_splits_at_the_kanji_kana_boundaries(self):
+        # 変更を保存ボタンを押して
+        tokens = content_tokens("変更を保存ボタンを押して")
+        self.assertIn("変更", tokens)          # the content survives
+        self.assertNotIn("を", tokens)         # the particle does not
+        self.assertNotIn("して", tokens)       # nor the inflection
+
+    def test_a_single_kanji_is_not_too_short_to_keep(self):
+        # 赤 alone carries the whole description; one Latin letter would not.
+        self.assertIn("red", content_tokens("赤いボタン"))
+
+    def test_colour_and_role_words_reach_the_english_the_dom_emits(self):
+        tokens = content_tokens("赤いボタンをクリック")
+        self.assertIn("red", tokens)
+        self.assertIn("button", tokens)
+
+    def test_full_width_and_half_width_normalise(self):
+        self.assertEqual(content_tokens("ＳＡＶＥ"), ["save"])
+        self.assertIn("キャンセル", content_tokens("ｷｬﾝｾﾙ"))
+
+    def test_bigrams_let_a_prefix_reach_a_longer_name(self):
+        # メール has to be able to find メールアドレス.
+        self.assertTrue(set(content_tokens("メール")) & JA_NODES[3].haystack())
+
+
+class JapaneseGroundingTest(unittest.TestCase):
+    def test_a_name_said_in_full_wins(self):
+        best = ja_grounder().ground("変更を保存ボタンを押して")[0]
+        self.assertEqual(best.ref, "j1")
+        self.assertGreater(best.score, 0.9)
+
+    def test_colour_alone_picks_the_right_button(self):
+        self.assertEqual(ja_grounder().ground("赤いボタンをクリック")[0].ref, "j0")
+
+    def test_a_shortened_field_name_still_grounds(self):
+        [only] = ja_grounder().ground("メール欄までスクロールして")
+        self.assertEqual(only.ref, "j3")
+
+    def test_a_katakana_name_said_bare_grounds(self):
+        self.assertEqual(ja_grounder().ground("キャンセル")[0].ref, "j2")
+
+    def test_nothing_on_the_page_matches_rather_than_everything(self):
+        self.assertEqual(ja_grounder().ground("自転車を押して"), [])
+
+    def test_the_english_path_is_unchanged_by_any_of_this(self):
+        self.assertEqual([c.ref for c in grounder().ground("click the red button")][:2], ["n0", "n1"])
+
+
+class MalformedSnapshotTest(unittest.TestCase):
+    """The snapshot is whatever a page chose to send, so parse it defensively.
+
+    A hidden or zero-sized window reports innerWidth 0; the extractor divides
+    by it, gets Infinity, and JSON.stringify writes null. One node like that
+    used to raise and take the entire utterance down with it.
+    """
+
+    def test_a_box_of_nulls_costs_the_position_and_nothing_else(self):
+        node = DomNode.from_dict({"ref": "n0", "name": "Save", "box": [None, None, None, None]})
+        self.assertIsNone(node.box)
+        self.assertEqual(node.name, "Save")
+
+    def test_every_shape_a_page_might_send_is_survivable(self):
+        for box in ([float("inf")] * 4, [float("nan")] * 4, "nope", [1, 2], {}, None, [1, 2, 3, "x"]):
+            self.assertIsNone(DomNode.from_dict({"ref": "n0", "box": box}).box)
+
+    def test_a_positionless_node_is_still_a_candidate(self):
+        grounder = DomGrounder(lambda: [{"ref": "n0", "role": "button", "name": "Save changes",
+                                         "box": [None, None, None, None]}])
+        [only] = grounder.ground("click save changes")
+        self.assertEqual(only.ref, "n0")
+        self.assertIsNone(only.box)
+
+
 if __name__ == "__main__":
     unittest.main()

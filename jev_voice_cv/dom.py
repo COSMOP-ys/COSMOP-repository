@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import math
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Sequence
 
@@ -47,9 +48,83 @@ _STOPWORDS = frozenset(
     up down left right next previous one thing item element
     """.split()
 )
-_IGNORED = _VERBS | _STOPWORDS
+# Japanese does not put spaces between words, so a whitespace or [a-z0-9]
+# tokenizer returns nothing at all for it - not a poor match, zero candidates.
+# Splitting on script boundaries instead gets most of the way there without a
+# morphological analyser, because kanji/kana alternation marks word edges:
+# 変更を保存ボタンを押して -> 変更 | を | 保存 | ボタン | を | 押 | して.
+# The grammatical hiragana runs then drop out as stopwords and what is left is
+# the content. Bigrams cover the rest: メール has to match メールアドレス, and
+# no run-level comparison does that.
+_JA_STOPWORDS = frozenset(
+    """
+    を は が に へ で と も の や から まで より ね よ か な こと それ これ あれ
+    して する した します ください ちょうだい おねがい お願い ある いる です ます
+    この その あの どの ここ そこ どこ もの ほう ため
+    """.split()
+)
+# Operation verbs, the same trade the English list makes: a word like 削除 is
+# both "the act of deleting" and half the label on the delete button. Dropping
+# it costs a little recall on the label and buys not matching every button
+# whenever someone says the verb.
+_JA_VERBS = frozenset(
+    """
+    押し 押す 押して クリック タップ 選択 選ん 開い 開く 閉じ 閉じる スクロール
+    移動 表示 見せ 教え 削除 消し 消す 入力 打ち 打つ 書い 書く 記入 保存
+    ハイライト 強調 探し 探す 見つけ 支払 購入
+    """.split()
+)
 
-_TOKEN = re.compile(r"[a-z0-9]+")
+# Spoken words mapped into the vocabulary the snapshot emits, which is English
+# because that is what the DOM and getComputedStyle give us. Without this,
+# "赤いボタン" cannot reach a node whose colour attribute says "red".
+_SYNONYMS = {
+    "赤": "red", "あか": "red", "レッド": "red",
+    "青": "blue", "あお": "blue", "ブルー": "blue",
+    "緑": "green", "みどり": "green", "グリーン": "green",
+    "黄": "yellow", "黄色": "yellow", "イエロー": "yellow",
+    "白": "white", "しろ": "white", "ホワイト": "white",
+    "黒": "black", "くろ": "black", "ブラック": "black",
+    "灰": "grey", "灰色": "grey", "グレー": "grey",
+    "紫": "purple", "パープル": "purple",
+    "橙": "orange", "オレンジ": "orange",
+    "桃": "pink", "ピンク": "pink",
+    "水色": "teal",
+    "ボタン": "button",
+    "リンク": "link",
+    "欄": "textbox", "入力欄": "textbox", "フィールド": "textbox",
+    "チェックボックス": "checkbox",
+    "画像": "image",
+    "メニュー": "menu",
+}
+
+_IGNORED = _VERBS | _STOPWORDS | _JA_STOPWORDS | _JA_VERBS
+
+_HAN = r"一-鿿㐀-䶿"
+_HIRAGANA = r"぀-ゟ"
+_KATAKANA = r"゠-ヿ"
+# One run per script. The boundaries between them are the segmentation.
+_TOKEN = re.compile(
+    f"[{_HAN}]+|[{_KATAKANA}]+|[{_HIRAGANA}]+|[a-z0-9]+"
+)
+_CJK_RUN = re.compile(f"\\A[{_HAN}{_KATAKANA}{_HIRAGANA}]+\\Z")
+_HIRAGANA_RUN = re.compile(f"\\A[{_HIRAGANA}]+\\Z")
+
+
+def _tokenize(text: str) -> list[str]:
+    """Every surface form worth matching on, in order, with repeats kept.
+
+    NFKC first so that full-width ＡＢＣ and half-width ｶﾀｶﾅ reach the same
+    tokens their normal forms would.
+    """
+    out: list[str] = []
+    for run in _TOKEN.findall(unicodedata.normalize("NFKC", text).lower()):
+        out.append(run)
+        if _CJK_RUN.match(run) and len(run) > 2:
+            # メールアドレス has to be reachable from メール, and a whole-run
+            # comparison never gets there.
+            out.extend(run[i:i + 2] for i in range(len(run) - 1))
+    return out
 
 
 @dataclass(frozen=True)
@@ -76,13 +151,12 @@ class DomNode:
 
     @classmethod
     def from_dict(cls, raw: Mapping[str, Any]) -> "DomNode":
-        box = raw.get("box")
         return cls(
             ref=str(raw["ref"]),
             role=str(raw.get("role") or ""),
             name=str(raw.get("name") or ""),
             text=str(raw.get("text") or ""),
-            box=tuple(float(v) for v in box) if box and len(box) == 4 else None,
+            box=_box(raw.get("box")),
             visible=bool(raw.get("visible", True)),
             in_viewport=bool(raw.get("inViewport", True)),
             enabled=bool(raw.get("enabled", True)),
@@ -107,17 +181,47 @@ class DomNode:
 
     def haystack(self) -> set[str]:
         parts = [self.name, self.text, self.role, *self.attrs.values(), *self.attrs.keys()]
-        return {t for part in parts for t in _TOKEN.findall(part.lower())}
+        return {t for part in parts for t in _tokenize(part)}
+
+
+def _box(raw: Any) -> tuple[float, float, float, float] | None:
+    """A rectangle, or nothing. This parses whatever a page chose to send.
+
+    The position is a hint for the description Jev reads, never how the action
+    finds its element, so a missing or nonsensical box costs a little context
+    and must not take the whole snapshot down with it.
+    """
+    if not isinstance(raw, (list, tuple)) or len(raw) != 4:
+        return None
+    try:
+        values = [float(v) for v in raw]
+    except (TypeError, ValueError):
+        return None
+    return tuple(values) if all(math.isfinite(v) for v in values) else None
 
 
 def content_tokens(prompt: str) -> list[str]:
     """What the speaker said, minus the words that describe the act of saying it."""
     seen: list[str] = []
-    for token in _TOKEN.findall(prompt.lower()):
-        if len(token) < 2 or token in _IGNORED or token in seen:
+    for token in _tokenize(prompt):
+        token = _SYNONYMS.get(token, token)
+        if _too_short(token) or token in _IGNORED or token in seen:
             continue
         seen.append(token)
     return seen
+
+
+def _too_short(token: str) -> bool:
+    """One Latin letter says nothing; one kanji often says everything.
+
+    A run of hiragana that short is grammar - a particle or an inflection - so
+    it goes whichever way the length rule sends it.
+    """
+    if _HIRAGANA_RUN.match(token):
+        return len(token) < 3
+    if _CJK_RUN.match(token):
+        return False
+    return len(token) < 2
 
 
 def _weights(nodes: Sequence[DomNode], tokens: Sequence[str]) -> dict[str, float]:
@@ -162,7 +266,7 @@ def _score(
     # Said by name, and the name is most of what was said: no ambiguity to weigh.
     name = node.name.strip().lower()
     if len(name) >= 3 and name in prompt_lower:
-        name_tokens = set(_TOKEN.findall(name))
+        name_tokens = {_SYNONYMS.get(t, t) for t in _tokenize(name)}
         if len(name_tokens & set(tokens)) / len(tokens) >= 0.6:
             return 0.97
 
@@ -298,6 +402,10 @@ DOM_SNAPSHOT_JS = r"""
       .filter((r) => OURS.test(r || ''))
   );
 
+  const vw = innerWidth || document.documentElement.clientWidth || 0;
+  const vh = innerHeight || document.documentElement.clientHeight || 0;
+  const sized = vw > 0 && vh > 0;
+
   const out = [];
   let n = 0;
   for (const el of ROOT.querySelectorAll(INTERACTIVE)) {
@@ -308,9 +416,13 @@ DOM_SNAPSHOT_JS = r"""
       style.visibility !== 'hidden' && style.display !== 'none' &&
       parseFloat(style.opacity || '1') > 0.05;
     if (!visible) continue;
-    const inViewport =
-      rect.bottom > 0 && rect.right > 0 &&
-      rect.top < innerHeight && rect.left < innerWidth;
+    // A hidden or zero-sized window reports innerWidth 0, and dividing by it
+    // yields Infinity, which JSON.stringify turns into null - so the box
+    // arrives as [null,null,null,null] and the reader has to cope. Better not
+    // to send it: an unknown position is not the same as position zero.
+    const inViewport = sized
+      ? rect.bottom > 0 && rect.right > 0 && rect.top < vh && rect.left < vw
+      : true;
 
     let ref = el.getAttribute('data-jev-ref');
     if (!ref || !OURS.test(ref)) {
@@ -335,8 +447,9 @@ DOM_SNAPSHOT_JS = r"""
             ROLE_BY_TAG[el.tagName] || el.tagName.toLowerCase(),
       name: accessibleName(el),
       text: (el.innerText || '').trim().slice(0, 160),
-      box: [rect.left / innerWidth, rect.top / innerHeight,
-            rect.right / innerWidth, rect.bottom / innerHeight],
+      box: sized
+        ? [rect.left / vw, rect.top / vh, rect.right / vw, rect.bottom / vh]
+        : null,
       visible: true,
       inViewport,
       enabled: !el.disabled && el.getAttribute('aria-disabled') !== 'true',

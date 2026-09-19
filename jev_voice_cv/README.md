@@ -101,6 +101,41 @@ much each spoken word narrows the page down — deliberately never 1.0, and wort
 recalibrating against your own logs. A word that belongs to one element scores
 high; a word every button shares does not.
 
+## Languages
+
+Jev needs nothing done to it. Measured 2026-09-19 on Japanese transcripts
+against these same English action descriptions and question wordings — no
+translation anywhere — intent was right on every clear command, the aside
+「さっき彼にチケットを開いてって言ったんだよ」 scored 0.06 on *addressed*, and
+clarity separated exactly as it does in English (commands 3.5–3.8, non-commands
+0.05–0.21).
+
+The grounder is where the work was. A `[a-z0-9]+` tokenizer returns **zero**
+tokens for Japanese — not a poor match, no candidates at all — and Japanese
+writes no spaces, so widening the character class does not help either.
+`dom.py` splits on script boundaries instead, which is a decent segmentation
+heuristic because kanji/kana alternation marks word edges:
+
+```
+変更を保存ボタンを押して  ->  変更 | を | 保存 | ボタン | を | 押 | して
+                          content   particle    content   particle   verb
+```
+
+The grammatical hiragana runs drop out as stopwords, character bigrams let
+メール reach メールアドレス, NFKC folds full-width and half-width forms
+together, and a synonym table maps spoken words into the vocabulary the DOM
+actually emits (赤 → `red`, ボタン → `button`), since `getComputedStyle` names
+colours in English whatever the page is written in.
+
+Verified end to end against a real browser and a Japanese page: snapshot →
+shortlist → gate → real click, plus 「アカウントを削除して」 stopping at
+CONFIRM. The Web Speech API side is a `lang` selector in the console, defaulted
+from `navigator.language`.
+
+This generalises to Chinese and Korean about as far as the heuristic does: Han
+runs and bigrams are the same machinery, but the stopword and synonym lists are
+Japanese, so treat those as the part to extend.
+
 ## Wiring the real APIs
 
 | | value (checked 2026-09-19) |

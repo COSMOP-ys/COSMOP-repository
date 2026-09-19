@@ -65,6 +65,11 @@
     <h2>Say something</h2>
     <div class="row">
       <button id="mic" type="button">Start microphone</button>
+      <label class="meta" for="lang">language</label>
+      <select id="lang">
+        <option value="en-US">English (en-US)</option>
+        <option value="ja-JP">日本語 (ja-JP)</option>
+      </select>
       <span class="meta" id="micnote"></span>
     </div>
     <form id="say" class="row" style="margin-bottom:0" autocomplete="off">
@@ -95,9 +100,18 @@
       <button class="safe" id="save">Save changes</button>
       <button id="cancel">Cancel</button>
     </div>
+    <div class="row">
+      <button class="danger" id="ja-delete">アカウントを削除</button>
+      <button class="safe" id="ja-save">変更を保存</button>
+      <button id="ja-cancel">キャンセル</button>
+    </div>
     <p class="row">
       <label for="email">Email</label>
       <input id="email" type="email" placeholder="you@example.com" />
+    </p>
+    <p class="row">
+      <label for="ja-email">メールアドレス</label>
+      <input id="ja-email" type="email" placeholder="you@example.com" />
     </p>
     <div id="spacer"></div>
     <button class="safe" id="submit" aria-label="Submit the order">Submit</button>
@@ -233,13 +247,14 @@ if (!Recognition) {
   el('micnote').textContent =
     'Web Speech API not available in this browser - use the text box, it takes the same path.';
 } else {
+  el('lang').value = (navigator.language || '').startsWith('ja') ? 'ja-JP' : 'en-US';
   el('micnote').textContent = 'Chrome and Edge send audio to their speech service.';
   mic.addEventListener('click', () => {
     if (recogniser) { recogniser.stop(); return; }
     recogniser = new Recognition();
     recogniser.continuous = true;
     recogniser.interimResults = true;
-    recogniser.lang = navigator.language || 'en-US';
+    recogniser.lang = el('lang').value;
     recogniser.onresult = (event) => {
       const result = event.results[event.results.length - 1];
       send(result[0].transcript.trim(), result.isFinal);

@@ -168,6 +168,38 @@ class BrowserTest(unittest.TestCase):
             PlaywrightExecutor(self.page).run(plan)
         self.assertEqual(self.page.inner_text("#log"), "")
 
+    # -- Japanese ------------------------------------------------------------
+
+    def test_japanese_labels_come_back_whole_from_the_page(self):
+        by_name = {n.name: n for n in snapshot(self.page)}
+        delete = by_name["アカウントを削除"]
+        self.assertEqual(delete.role, "button")
+        self.assertEqual(delete.attrs["colour"], "red")
+        # The <label> names the field in Japanese too.
+        self.assertEqual(by_name["メールアドレス"].role, "textbox")
+
+    def test_a_japanese_command_grounds_and_clicks_the_right_button(self):
+        pipeline = self.pipeline(CLICK, decide("click_element"))
+        # 変更を保存ボタンを押して - "press the save changes button"
+        plan = pipeline.resolve(
+            pipeline.submit("変更を保存ボタンを押して", final=True)
+        )
+        self.assertIs(plan.kind, PlanKind.EXECUTE)
+        PlaywrightExecutor(self.page).run(plan)
+        self.assertEqual(self.page.inner_text("#log"), "ja-save;")
+
+    def test_a_japanese_colour_reaches_the_english_computed_style(self):
+        pipeline = self.pipeline(CLICK, decide("click_element"))
+        # 赤いボタンを押して - "press the red button". Two are red; the
+        # shortlist has to contain both and Jev picks.
+        grounder = DomGrounder(dom_provider(self.page))
+        refs = [c.ref for c in grounder.ground("赤いボタンを押して")]
+        names = {n.ref: n.name for n in grounder.last_snapshot}
+        self.assertIn("Delete account", [names[r] for r in refs[:2]])
+        self.assertIn("アカウントを削除", [names[r] for r in refs[:2]])
+        del pipeline
+
+
     def test_an_unregistered_action_is_a_loud_failure(self):
         pipeline = self.pipeline(CLICK, decide("click_element"))
         plan = pipeline.resolve(pipeline.submit("click save changes", final=True))

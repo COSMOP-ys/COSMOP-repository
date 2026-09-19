@@ -26,6 +26,13 @@
 
   <p><a href="#bottom" id="docs">Read the documentation</a></p>
 
+  <!-- A Japanese section, because a tokenizer that assumes spaces returns
+       nothing at all here rather than returning a poor match. -->
+  <button class="danger" id="ja-delete">アカウントを削除</button>
+  <button class="safe" id="ja-save">変更を保存</button>
+  <p><label for="ja-email">メールアドレス</label>
+     <input id="ja-email" type="email" placeholder="you@example.com" /></p>
+
   <div id="spacer"></div>
 
   <button class="safe" id="submit" aria-label="Submit the order">Submit</button>
