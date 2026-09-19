@@ -240,35 +240,47 @@ It rides along in the request already being sent, so it costs input tokens and
 no round trip. Set `VoicePipeline(clarity_floor=2.5)` to turn it on; it is off
 by default.
 
-Measured on the same 24 cases, restricted to the 18 answers that picked an
-action — blocking a `no_action` answer is free, since the pipeline rejects
-those anyway, and counting them makes any bar look far worse than it is:
+Measured on the same 24 cases, one request per utterance, restricted to the 18
+answers that picked an action — blocking a `no_action` answer is free, since
+the pipeline rejects those anyway, and counting them makes any bar look far
+worse than it is:
 
 ```
-                 correct (15)   wrong (3)
-clarity  mean        3.20          2.17     <- separates
-choice p mean        0.95          0.91     <- does not
+                 correct (14)   wrong (4)
+clarity  mean        3.47          1.74     <- separates
+choice p mean        0.99          0.78     <- separates the harmless ones only
 
- 2.21  p=1.00  WRONG  scroll to the
- 2.32  p=0.75  WRONG  show me the delete button
- 1.97  p=0.98  WRONG  she said we should delete the whole thing
- 2.12  p=0.99  ok     click the sa          | fragments: held anyway
- 2.21  p=0.97  ok     open the              | on a partial transcript
- 2.68  p=1.00  ok     delete                |
- 0.74  p=0.35  ok     where is the cancel button
- 3.14 … 3.91          every complete, correct command
+ 0.23  p=0.52  WRONG  where is the cancel button
+ 1.58  p=1.00  WRONG  she said we should delete the whole thing
+ 2.11  p=0.92  ok     open the        | fragments: held anyway on a partial
+ 2.13  p=1.00  ok     click the sa    |
+ 2.14  p=1.00  WRONG  scroll to the
+ 3.02  p=0.60  WRONG  show me the delete button      <- escapes the floor
+ 3.15 … 3.94          every complete, correct command
 ```
 
-Every complete command scores 3.14 or better; everything under 2.7 is either
-wrong or an unfinished fragment. **A floor at 2.5 blocks all three misses**,
-including both of the dangerous ones the probability waved through at 0.98 and
-1.00, and the only complete command it costs is the one indirect phrasing
-("where is the cancel button"), which the choice probability had already put at
-0.35 and headed for CONFIRM.
+**A floor at 2.5 blocks three of the four misses, and costs nothing but
+fragments** — the two correct answers below it are unfinished transcripts the
+gate holds anyway. Both dangerous misses are among the three: `delete_element`
+at p=1.00 and a speculative `scroll_to_element` at p=1.00, neither of which any
+threshold on the probability could have touched.
 
-Caveats worth more than the numbers: 18 actionable answers, three of them
-wrong, one sample, batched. A bar tuned to three misses is a bar tuned to
-noise. The rung wording is load-bearing. Treat 2.5 as a starting point and run
+The one that escapes is the one that does not matter: "show me the delete
+button" resolved to `highlight_element` instead of `scroll_to_element`. Both
+are read-only and idempotent, on the same target. Note the pattern in the p
+column — the probability was low (0.52, 0.60) exactly on the two harmless
+misses and 1.00 on the two dangerous ones. As a gate that is worse than
+useless.
+
+Raising the floor to 3.5 catches the fourth miss and starts eating real
+commands (`type my email address in there` at 3.15), which is a bad trade for
+an action that was harmless to begin with.
+
+Caveats worth more than the numbers: 18 actionable answers, four of them wrong,
+one sample. A bar tuned to four misses is a bar tuned to noise. The rung
+wording is load-bearing. The two runs also disagreed on one case — "where is
+the cancel button" was right in the batched run and wrong here — so some of
+this is run-to-run variance. Treat 2.5 as a starting point and run
 `scripts/probe_clarity.py` against your own set before shipping it.
 
 ## What to measure

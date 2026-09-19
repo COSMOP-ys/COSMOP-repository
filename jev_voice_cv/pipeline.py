@@ -77,8 +77,10 @@ class VoicePipeline:
     # Minimum position on the CLARITY_RUNGS scale before an action may run
     # unattended. None disables the question entirely; it rides along in the
     # request that is already being sent, so enabling it costs tokens and no
-    # round trip. 2.5-3.0 is what the labelled set suggests, on 18 answers -
-    # calibrate before trusting it.
+    # round trip. On the labelled set a floor of 2.5 blocked three of four
+    # wrong answers - including both that the choice probability waved through
+    # at 1.00 - while costing only unfinished fragments. That is 18 answers and
+    # four misses, so calibrate it before trusting it.
     clarity_floor: float | None = None
 
     _seq: int = field(default=0, init=False)
