@@ -1,14 +1,18 @@
-# jev_voice_cv — voice operation with CV grounding and Jev typed decisions
+# jev_voice_cv — voice operation with on-screen grounding and Jev typed decisions
 
-A prototype of the pipeline the voice-accuracy question came down to:
+A prototype of the pipeline the voice-accuracy question came down to. Speech
+recognition gets you the words; the hard half is turning "click the red one"
+into a specific element, and then deciding whether you are sure enough to act.
 
 ```
-speech ─▶ ASR ─▶ Jev: is this addressed to the computer?   (yes/no, calibrated)
+speech ─▶ ASR ─▶ Jev, one request, two questions:
+                 │   • is this addressed to the computer?   (boolean, probability)
+                 │   • which action?                        (one-of-N, closed set)
                  │
-                 ├─▶ Jev: which action?                    (one-of-N, closed set)
-                 │
-                 ├─▶ SAM 3.1: which regions match the words? (boxes + masks)
-                 │     └─▶ Jev: which candidate?           (one-of-N over those regions)
+                 ├─▶ grounding: which things on screen match those words?
+                 │     DOM accessibility tree (default, local, free)
+                 │     SAM 3.1                (fallback: canvas, video, native)
+                 │     └─▶ Jev: which candidate?            (one-of-N over those)
                  │
                  └─▶ gate: execute / speculate / confirm / reject / hold
 ```
@@ -19,30 +23,35 @@ speech ─▶ ASR ─▶ Jev: is this addressed to the computer?   (yes/no, cali
 |---|---|
 | Speech recognition | **Unchanged.** Jev takes no audio; your ASR is still your ASR |
 | Intent → action | **Better.** The answer cannot leave the enumerated set, so no invented action names and nothing to parse |
-| Utterance → on-screen target | **Better, and this is the new part.** SAM 3.1 turns "the red submit button" into concrete candidates; Jev picks one of them instead of a coordinate being guessed |
-| Free-form arguments (note body, search string) | **Not covered.** Jev generates no text; `needs_text_arg` routes that to a small LLM |
+| Utterance → on-screen target | **Better, and this is the new part.** The DOM (or SAM 3.1) turns "the red submit button" into concrete candidates; Jev picks one of them instead of a coordinate being guessed |
+| Free-form arguments (note body, search string) | **Not covered.** Jev generates no text; `needs_text_arg` routes that to a small LLM, and `plan.with_text(...)` carries the result |
 | Wrong action actually firing | **Better, if you use the probabilities.** Per-action thresholds, destructive actions always confirming, and read-only-only speculation are what buy this — not the model by itself |
 
 ## Run it
 
 ```sh
-python3 -m jev_voice_cv.cli          # offline demo, deterministic fake model, no keys
-python3 -m unittest discover -s tests -t .
+python -m jev_voice_cv.cli                       # offline demo, no keys
+python -m jev_voice_cv.web.server --offline      # voice console on :8765, no keys
+python -m unittest discover -s tests -t .        # 92 tests, stdlib only
 ```
 
-Stdlib only, no install step. The demo streams partial transcripts through the
-pipeline and prints the gate decision per revision:
+The package is stdlib-only. Playwright is needed for `playwright_exec` and the
+browser tests, which skip cleanly when it is absent:
 
-```
-  [partial] 'open the notes app'                    -> speculate  read-only and confident on partial
-  [final  ] 'open the notes app and create a ...'   -> execute    final transcript, above execute threshold
-            skip (already ran): open_app
-  [partial] 'delete the red'                        -> hold       partial transcript, action is not read-only+idempotent
-  [final  ] 'delete the red delete button'          -> confirm    action always requires confirmation
-  [final  ] 'so anyway I told him to open a ticket' -> reject     not addressed to the computer
+```sh
+python -m venv .venv && .venv/Scripts/python -m pip install playwright
+.venv/Scripts/python -m unittest tests.test_browser   # 13 tests, real browser
 ```
 
-## The four rules doing the work
+### The voice console
+
+`web/server.py` serves a page that streams every interim speech result — or
+every keystroke, which takes the identical path and needs no microphone —
+together with a snapshot of its own accessibility tree. It shows the verdict per
+revision and applies the ones the gate cleared. With `--offline` it runs a
+keyword stub instead of Jev, so the whole loop works with no key and no network.
+
+## The five rules doing the work
 
 1. **Per-action thresholds** (`ActionSpec`). One global cutoff either blocks
    harmless reads or lets `delete` through on a mishearing. Scale the bar to the
@@ -53,34 +62,68 @@ pipeline and prints the gate decision per revision:
    speculative ever needs undoing.
 3. **Supersede and discard.** Each transcript revision bumps a sequence number;
    a decision that returns for an older ticket comes back `SUPERSEDED` and is
-   never executed (`VoicePipeline.resolve` re-checks after every model call).
-4. **No target, no action.** If CV grounds nothing, the pipeline asks or waits.
-   It never falls through to a guessed coordinate.
+   never executed (`resolve` re-checks after every model call).
+4. **No target, no action.** If grounding finds nothing, the pipeline asks or
+   waits. It never falls through to a guessed coordinate.
+5. **Act on the ref, not the description.** The snapshot stamps `data-jev-ref`
+   on each element and the executor addresses that. Between grounding and
+   execution the page can move, and re-matching "the second red button" would
+   hit whatever took its place.
 
 `policy.combine` multiplies the intent and target probabilities. That assumes
 independence, which is false — Jev reads the same transcript twice, so correlated
 errors make the product optimistic. Good enough as a gate, not as a calibration
 claim.
 
+## Grounding: DOM first, pixels only when you must
+
+`DomGrounder` reads the accessibility tree: names, roles, placeholders, and the
+computed colour of every control, so "the red delete button" matches on all
+three words without a screenshot existing. It is local, free, and nothing leaves
+the machine. `Sam31Grounder` is the fallback for what the DOM cannot describe —
+`<canvas>`, video, native windows.
+
+Either way the grounder is a **recall** device: it shortlists cheaply and Jev
+makes the one-of-N pick. Its `score` is a lexical heuristic — weighted by how
+much each spoken word narrows the page down — deliberately never 1.0, and worth
+recalibrating against your own logs. A word that belongs to one element scores
+high; a word every button shares does not.
+
 ## Wiring the real APIs
 
 | | value (checked 2026-09-19) |
 |---|---|
-| Jev model id | `~typesafe/jev-latest`, pinned `typesafe/jev-1.13` |
-| Jev price / latency | $0.042 per 1M input tokens, output free; 70–500 ms; 32k context; OpenRouter **beta** |
+| Jev via Vercel AI Gateway | model `typesafe-ai/jev`, 32k context, `POST https://ai-gateway.vercel.sh/v4/ai/evaluation-model` |
+| Jev price | $0.042 / 1M input, output free — currently $0 both ways under promotional pricing **until 2026-09-25** |
+| Jev free tier | Free Tier eligible, so the $5/month included credit covers it. Buying credits moves the team to the paid tier and **permanently** ends that monthly credit |
 | SAM 3.1 price | $2.50 / 1k images, $0.20 / 1k video frames; up to 16 tracked targets (Object Multiplex) |
-| Keys | `OPENROUTER_API_KEY`, `META_API_KEY` |
+| Keys | `AI_GATEWAY_API_KEY`, `META_API_KEY` |
 
-**The two transports are unverified.** openrouter.ai and developer.meta.com are
-both blocked from the sandbox this was written in, so the request and response
-mapping was never exercised against the live beta. Check these before the first
-real call — everything else is independent of them:
+**On the Jev transport.** Vercel documents evaluation as "available through the
+AI SDK only" — there is no published REST endpoint. The request in `jev.py` was
+derived from the AI SDK's own gateway provider (`@ai-sdk/gateway@4.0.87`,
+`getUrl()` → `${baseURL}/evaluation-model`, body `{state, questions}`, headers
+`ai-evaluation-model-specification-version: 4` and `ai-model-id`) and confirmed
+against the live service: unauthenticated it answers 401 `authentication_error`,
+and one character off the path it answers 404. Undocumented means it can move
+without notice — `DEFAULT_ENDPOINT` and `_parse_answer` are the two places to
+re-check. Nothing in `policy.py` or `pipeline.py` depends on either.
 
-- `jev.py`: `DEFAULT_ENDPOINT`, `_post` body, `_parse_probabilities`
-- `grounding.py`: `DEFAULT_ENDPOINT`, `ground` body, `_parse_candidates`
+**The SAM transport is still unverified**: developer.meta.com was unreachable
+when this was written, so check `grounding.py`'s `DEFAULT_ENDPOINT`, request
+body and `_parse_candidates` before the first real call. The DOM path does not
+need it.
 
 `DryRunExecutor` is the default on purpose. Keep it until the thresholds are
 tuned against recorded sessions.
+
+## Round trips
+
+Two per revision, not three. "Is this addressed to the computer?" and "which
+action?" are different questions about the same state, and Jev answers several
+in parallel in one request — so the filter question costs a few input tokens and
+no latency. The target question has to be separate: its option set does not
+exist until an action that needs a target has been chosen.
 
 ## What to measure
 
@@ -98,11 +141,12 @@ data before trusting a threshold.
 
 ## Data leaving the machine
 
-Every grounded turn ships a screenshot to Meta's API and the app state to
-OpenRouter/TypeSafe. On a real desktop that can include mail, tokens and
-customer data. Options: crop the frame to the active window, ground from the
-accessibility tree or DOM instead of pixels (`StaticGrounder` is the same
-interface and costs nothing), or gate grounding behind push-to-talk.
+With DOM grounding, what leaves is the transcript plus element names and roles —
+no pixels. With `Sam31Grounder`, every grounded turn ships a screenshot to
+Meta's API, which on a real desktop can include mail, tokens and customer data.
+Options: crop the frame to the active window, stay on the DOM path, or gate
+grounding behind push-to-talk. AI Gateway reports Jev as zero-data-retention and
+no-training; that covers the provider path, not your own logs.
 
 ## Known limits
 
@@ -111,6 +155,8 @@ interface and costs nothing), or gate grounding behind push-to-talk.
 - **No free-text extraction.** `needs_text_arg` marks where a small LLM goes.
 - **Synchronous by design.** `submit`/`resolve` are split so the staleness rules
   survive a move to async, but there is no event loop here yet.
+- **Web Speech API** is Chrome/Edge only and sends audio to their speech
+  service. The console's text box exercises the same path without it.
 - **`ActionSpec` set is an example**, not a recommendation. Yours should come from
   the actions your app actually exposes.
 

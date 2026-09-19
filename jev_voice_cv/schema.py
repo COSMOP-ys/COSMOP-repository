@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
 from typing import Mapping, Sequence
 
@@ -17,6 +17,9 @@ class ActionSpec:
     """
 
     name: str
+    # What this action means, in the words a speaker would use. Jev picks
+    # between the descriptions, so a sentence beats a bare identifier.
+    description: str = ""
     read_only: bool = False
     idempotent: bool = False
     # End-of-utterance bar. Below it we ask instead of acting.
@@ -43,6 +46,11 @@ class ActionSpec:
         if self.speculate_threshold == self.execute_threshold and self.read_only:
             raise ValueError(f"{self.name}: speculating on partials needs a higher bar than end-of-turn")
 
+    @property
+    def meaning(self) -> str:
+        """What Jev is shown for this option."""
+        return self.description or self.name
+
 
 @dataclass(frozen=True)
 class Candidate:
@@ -65,6 +73,8 @@ class Decision:
     choice: str
     probabilities: Mapping[str, float]
     latency_ms: float | None = None
+    # Only set for score questions: the interpolated position on the scale.
+    score: float | None = None
 
     @property
     def confidence(self) -> float:
@@ -89,8 +99,16 @@ class Plan:
     reason: str = ""
     # Set when the action needs free text that Jev cannot produce.
     text_arg_from: str | None = None
+    # The text itself, once the caller has obtained it. Jev returns choices and
+    # probabilities, never prose, so this is always filled in from outside -
+    # a small LLM, or the raw transcript for straight dictation.
+    text_arg: str | None = None
     trace: Sequence[str] = field(default_factory=tuple)
 
     @property
     def runnable(self) -> bool:
         return self.kind in (PlanKind.EXECUTE, PlanKind.SPECULATE)
+
+    def with_text(self, text: str) -> "Plan":
+        """Attach the free-form argument this action needs."""
+        return replace(self, text_arg=text)

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Grounding fixture</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; }
+    button { padding: 8px 14px; border: 0; border-radius: 6px; color: #fff; }
+    .danger { background: #d0021b; }
+    .safe { background: #1f9d55; }
+    .plain { background: #e4e4e7; color: #18181b; }
+    #spacer { height: 1400px; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <h1>Grounding fixture</h1>
+
+  <button class="danger" id="delete">Delete account</button>
+  <button class="safe" id="save">Save changes</button>
+  <button class="plain" id="cancel">Cancel</button>
+  <button class="danger hidden" id="ghost">Delete everything</button>
+
+  <p><label for="email">Email</label>
+     <input id="email" type="email" placeholder="you@example.com" /></p>
+
+  <p><a href="#bottom" id="docs">Read the documentation</a></p>
+
+  <div id="spacer"></div>
+
+  <button class="safe" id="submit" aria-label="Submit the order">Submit</button>
+  <p id="bottom">bottom</p>
+  <p id="log"></p>
+
+  <script>
+    // Records what was actually pressed, so a test can tell a real click from
+    // a plan that merely claimed to have clicked.
+    document.addEventListener('click', (e) => {
+      const button = e.target.closest('button, a');
+      if (button) document.getElementById('log').textContent += button.id + ';';
+    });
+  </script>
+</body>
+</html>

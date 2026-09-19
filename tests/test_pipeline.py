@@ -50,17 +50,49 @@ class SupersedeTest(unittest.TestCase):
 
     def test_audio_arriving_mid_decision_cancels_that_decision(self):
         pipeline: VoicePipeline
+        inner = scripted("open_app", 0.99)
 
         def handler(question, state, options):
-            if list(options) == ["yes", "no"]:
-                # New speech lands while Jev is still answering.
-                pipeline.submit("open the notes app instead", final=False)
-                return Decision("yes", {"yes": 0.99, "no": 0.01})
-            raise AssertionError("must not keep scoring a superseded transcript")
+            # New speech lands while Jev is still answering the request.
+            pipeline.submit("open the notes app instead", final=False)
+            return inner(question, state, options)
 
         pipeline = VoicePipeline(actions=[OPEN], jev=MockJev(handler))
         ticket = pipeline.submit("open the notes app", final=True)
         self.assertIs(pipeline.resolve(ticket).kind, PlanKind.SUPERSEDED)
+
+    def test_target_question_is_skipped_once_the_transcript_is_superseded(self):
+        pipeline: VoicePipeline
+        inner = scripted("scroll", 0.99)
+        grounder = FakeGrounder([Candidate("a", "red button"), Candidate("b", "red link")])
+
+        def handler(question, state, options):
+            if "candidate" in question.lower():
+                raise AssertionError("must not keep scoring a superseded transcript")
+            pipeline.submit("scroll to the red link instead", final=False)
+            return inner(question, state, options)
+
+        pipeline = VoicePipeline(actions=[SCROLL], jev=MockJev(handler), grounder=grounder)
+        ticket = pipeline.submit("scroll to the red button", final=True, frame=FRAME)
+        self.assertIs(pipeline.resolve(ticket).kind, PlanKind.SUPERSEDED)
+
+
+class BatchingTest(unittest.TestCase):
+    def test_filter_and_intent_share_one_request(self):
+        jev = MockJev(scripted("open_app", 0.99))
+        pipeline = VoicePipeline(actions=[OPEN], jev=jev)
+        self.assertIs(
+            pipeline.resolve(pipeline.submit("open the notes app", final=True)).kind,
+            PlanKind.EXECUTE,
+        )
+        self.assertEqual(jev.batches, [["intent", "addressed"]])
+
+    def test_target_is_a_second_request_because_the_options_do_not_exist_yet(self):
+        jev = MockJev(scripted("click", 0.99, target_p=0.99))
+        grounder = FakeGrounder([Candidate("a", "red submit"), Candidate("b", "red delete")])
+        pipeline = VoicePipeline(actions=[CLICK], jev=jev, grounder=grounder)
+        pipeline.resolve(pipeline.submit("click the red one", final=True, frame=FRAME))
+        self.assertEqual(jev.batches, [["intent", "addressed"], ["target"]])
 
     def test_cancel_drops_everything_in_flight(self):
         pipeline = VoicePipeline(actions=[OPEN], jev=MockJev(scripted("open_app", 0.99)))

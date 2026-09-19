@@ -45,7 +45,11 @@ class Frame:
 
 
 class Grounder(Protocol):
-    def ground(self, prompt: str, frame: Frame) -> Sequence[Candidate]:
+    # False for grounders that read the live page instead of a picture of it.
+    # The pipeline only insists on a frame for the ones that need one.
+    needs_frame: bool
+
+    def ground(self, prompt: str, frame: Frame | None = None) -> Sequence[Candidate]:
         """Return the candidates matching `prompt`, best first."""
 
 
@@ -54,7 +58,14 @@ class GroundingError(RuntimeError):
 
 
 class Sam31Grounder:
-    """Text-prompted segmentation against the SAM 3.1 API."""
+    """Text-prompted segmentation against the SAM 3.1 API.
+
+    The fallback, not the default: see dom.py for why a browser should ground
+    against the accessibility tree first and only reach for pixels when the
+    target is a canvas, a video or a native window.
+    """
+
+    needs_frame = True
 
     def __init__(
         self,
@@ -76,7 +87,9 @@ class Sam31Grounder:
         self._max_candidates = max_candidates
         self._timeout = timeout
 
-    def ground(self, prompt: str, frame: Frame) -> Sequence[Candidate]:
+    def ground(self, prompt: str, frame: Frame | None = None) -> Sequence[Candidate]:
+        if frame is None:
+            raise GroundingError("segmentation needs a frame")
         body = json.dumps(
             {
                 "model": self._model,
@@ -135,15 +148,16 @@ def _parse_candidates(payload: Any, prompt: str) -> list[Candidate]:
 class StaticGrounder:
     """Offline stand-in: returns fixtures, filtered by substring on the label.
 
-    Also the shape a DOM-based grounder takes in the browser, where accessible
-    names are already on hand and no pixels need to leave the machine.
+    Kept for tests and fixtures; the real browser path is DomGrounder.
     """
+
+    needs_frame = False
 
     def __init__(self, candidates: Sequence[Candidate]) -> None:
         self._candidates = list(candidates)
         self.prompts: list[str] = []
 
-    def ground(self, prompt: str, frame: Frame) -> Sequence[Candidate]:
+    def ground(self, prompt: str, frame: Frame | None = None) -> Sequence[Candidate]:
         self.prompts.append(prompt)
         words = [w for w in prompt.lower().split() if len(w) > 2]
         hits = [c for c in self._candidates if any(w in c.label.lower() for w in words)]

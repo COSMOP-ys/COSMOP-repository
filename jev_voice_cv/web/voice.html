@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Voice console</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #18181b; --muted: #71717a; --line: #e4e4e7;
+    --panel: #fafafa; --accent: #2563eb;
+    --execute: #15803d; --speculate: #a16207; --confirm: #b45309;
+    --reject: #b91c1c; --hold: #52525b; --superseded: #a1a1aa;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #09090b; --fg: #f4f4f5; --muted: #a1a1aa; --line: #27272a;
+      --panel: #131316; --accent: #60a5fa;
+      --execute: #4ade80; --speculate: #fcd34d; --confirm: #fbbf24;
+      --reject: #f87171; --hold: #a1a1aa; --superseded: #52525b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px 16px; background: var(--bg); color: var(--fg);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 900px; margin: 0 auto; display: grid; gap: 20px; }
+  h1 { font-size: 20px; margin: 0; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em;
+       color: var(--muted); margin: 0 0 10px; }
+  .panel { border: 1px solid var(--line); border-radius: 10px; padding: 16px; background: var(--panel); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  button { font: inherit; padding: 8px 14px; border: 1px solid var(--line);
+           border-radius: 7px; background: var(--bg); color: var(--fg); cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  #app .danger { background: #d0021b; color: #fff; border-color: #d0021b; }
+  #app .safe   { background: #1f9d55; color: #fff; border-color: #1f9d55; }
+  input[type=text], input[type=email] {
+    font: inherit; padding: 8px 10px; border: 1px solid var(--line);
+    border-radius: 7px; background: var(--bg); color: var(--fg); min-width: 260px;
+  }
+  #mic.on { background: #d0021b; color: #fff; border-color: #d0021b; }
+  #transcript { width: 100%; }
+  .verdict { font-weight: 600; text-transform: uppercase; letter-spacing: .04em; font-size: 13px; }
+  .execute { color: var(--execute); } .speculate { color: var(--speculate); }
+  .confirm { color: var(--confirm); } .reject { color: var(--reject); }
+  .hold { color: var(--hold); } .superseded { color: var(--superseded); }
+  .meta { color: var(--muted); font-size: 13px; }
+  pre { margin: 8px 0 0; font-size: 12px; color: var(--muted); white-space: pre-wrap; }
+  ol { margin: 0; padding-left: 20px; font-size: 13px; color: var(--muted); }
+  #spacer { height: 900px; }
+  .hint { color: var(--muted); font-size: 13px; margin: 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Voice console</h1>
+  <p class="hint">
+    Every keystroke or interim speech result is a new transcript revision. The
+    server decides on each one and the verdict below is what the gate allows:
+    only read-only, idempotent actions may run before you finish speaking.
+  </p>
+
+  <section class="panel">
+    <h2>Say something</h2>
+    <div class="row">
+      <button id="mic" type="button">Start microphone</button>
+      <span class="meta" id="micnote"></span>
+    </div>
+    <form id="say" class="row" style="margin-bottom:0" autocomplete="off">
+      <input id="transcript" type="text" autocomplete="off"
+             placeholder="…or type here: each keystroke streams as a partial" />
+      <button type="submit">End of utterance</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2>Verdict</h2>
+    <div><span class="verdict hold" id="kind">idle</span>
+         <span class="meta" id="summary"></span></div>
+    <pre id="trace"></pre>
+  </section>
+
+  <section class="panel">
+    <h2>What ran</h2>
+    <ol id="log"></ol>
+  </section>
+
+  <!-- The application under voice control. Only this subtree is snapshotted,
+       so the console's own controls are never candidates. -->
+  <section class="panel" id="app">
+    <h2>Demo app</h2>
+    <div class="row">
+      <button class="danger" id="delete">Delete account</button>
+      <button class="safe" id="save">Save changes</button>
+      <button id="cancel">Cancel</button>
+    </div>
+    <p class="row">
+      <label for="email">Email</label>
+      <input id="email" type="email" placeholder="you@example.com" />
+    </p>
+    <div id="spacer"></div>
+    <button class="safe" id="submit" aria-label="Submit the order">Submit</button>
+  </section>
+</main>
+
+<script>
+const snapshot = () => (/*__DOM_SNAPSHOT_JS__*/null) || [];
+window.__jevRoot = document.getElementById('app');
+
+const el = (id) => document.getElementById(id);
+const logList = el('log');
+
+function note(text) {
+  const li = document.createElement('li');
+  li.textContent = text;
+  logList.prepend(li);
+  while (logList.children.length > 12) logList.lastChild.remove();
+}
+
+// -- acting on a plan, mirroring jev_voice_cv/playwright_exec.py --------------
+
+const SAFE_REF = /^[A-Za-z0-9_-]{1,64}$/;
+
+function locate(ref) {
+  if (!SAFE_REF.test(ref || '')) throw new Error('unsafe ref ' + ref);
+  const found = window.__jevRoot.querySelectorAll('[data-jev-ref="' + ref + '"]');
+  if (found.length !== 1) throw new Error(ref + ' matched ' + found.length + ' elements');
+  return found[0];
+}
+
+const HANDLERS = {
+  scroll_to_element: (node) => {
+    node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return 'scrolled to ' + node.textContent.trim();
+  },
+  highlight_element: (node) => {
+    const previous = node.style.outline;
+    node.style.outline = '3px solid #ff3b30';
+    node.style.outlineOffset = '2px';
+    setTimeout(() => { node.style.outline = previous; }, 1500);
+    return 'highlighted ' + node.textContent.trim();
+  },
+  click_element: (node) => { node.click(); return 'clicked ' + node.textContent.trim(); },
+  type_text: (node, plan, text) => {
+    if (!text) throw new Error('type_text needs text and none was dictated');
+    node.focus(); node.value = text;
+    return 'typed into ' + (node.id || plan.target.ref);
+  },
+};
+
+// Collapses the speculate-then-confirm pair, like executor.Dedupe.
+const lastRun = new Map();
+function shouldRun(plan) {
+  const key = plan.action + '|' + (plan.target ? plan.target.ref : '');
+  const now = performance.now();
+  const previous = lastRun.get(key);
+  lastRun.set(key, now);
+  return previous === undefined || now - previous > 3000;
+}
+
+function apply(plan, transcript) {
+  if (!plan.runnable) return;
+  const handler = HANDLERS[plan.action];
+  if (!handler) { note('no handler for ' + plan.action); return; }
+  if (!shouldRun(plan)) { note('skip (already ran): ' + plan.action); return; }
+  try {
+    const node = plan.target ? locate(plan.target.ref) : null;
+    note((plan.kind === 'speculate' ? 'speculate: ' : 'execute: ') +
+         handler(node, plan, transcript));
+  } catch (err) {
+    note('failed: ' + err.message);
+  }
+}
+
+// -- the loop ----------------------------------------------------------------
+
+let inFlight = 0;
+
+async function send(text, final) {
+  const mine = ++inFlight;
+  const response = await fetch('/resolve', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, final, nodes: snapshot() }),
+  });
+  const plan = await response.json();
+  // The server supersedes by sequence too; this just keeps the UI honest when
+  // answers come back out of order.
+  if (mine !== inFlight) return;
+  render(plan, text);
+  apply(plan, text);
+}
+
+function render(plan, text) {
+  const kind = el('kind');
+  kind.textContent = plan.kind;
+  kind.className = 'verdict ' + plan.kind;
+  const target = plan.target ? ' -> ' + plan.target.label : '';
+  el('summary').textContent =
+    [plan.action || '(no action)', target, plan.confidence ? 'p=' + plan.confidence : '',
+     plan.reason ? '(' + plan.reason + ')' : ''].filter(Boolean).join(' ');
+  el('trace').textContent = (plan.trace || []).join('   ');
+}
+
+let debounce;
+el('transcript').addEventListener('input', (e) => {
+  clearTimeout(debounce);
+  const text = e.target.value;
+  // Interim ASR results arrive several times a second; typing is throttled to
+  // roughly the same rate so the two paths behave alike.
+  debounce = setTimeout(() => send(text, false), 120);
+});
+// Enter or the button both end the utterance. A form submit is used rather
+// than a keydown listener so the two paths cannot drift apart.
+el('say').addEventListener('submit', (e) => {
+  e.preventDefault();
+  clearTimeout(debounce);
+  const input = el('transcript');
+  if (!input.value) return;
+  send(input.value, true);
+  input.value = '';
+});
+
+// -- microphone --------------------------------------------------------------
+
+const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const mic = el('mic');
+let recogniser = null;
+
+if (!Recognition) {
+  mic.disabled = true;
+  el('micnote').textContent =
+    'Web Speech API not available in this browser - use the text box, it takes the same path.';
+} else {
+  el('micnote').textContent = 'Chrome and Edge send audio to their speech service.';
+  mic.addEventListener('click', () => {
+    if (recogniser) { recogniser.stop(); return; }
+    recogniser = new Recognition();
+    recogniser.continuous = true;
+    recogniser.interimResults = true;
+    recogniser.lang = navigator.language || 'en-US';
+    recogniser.onresult = (event) => {
+      const result = event.results[event.results.length - 1];
+      send(result[0].transcript.trim(), result.isFinal);
+    };
+    recogniser.onerror = (event) => note('speech error: ' + event.error);
+    recogniser.onend = () => {
+      recogniser = null;
+      mic.classList.remove('on');
+      mic.textContent = 'Start microphone';
+    };
+    recogniser.start();
+    mic.classList.add('on');
+    mic.textContent = 'Stop microphone';
+  });
+}
+</script>
+</body>
+</html>

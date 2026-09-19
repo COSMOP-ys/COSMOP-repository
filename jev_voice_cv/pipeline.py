@@ -1,4 +1,4 @@
-"""voice -> (CV grounding) -> Jev -> gated action.
+"""voice -> (grounding) -> Jev -> gated action.
 
 Speed in this design comes from deciding on partial transcripts, before the
 speaker has finished. That is also where it can go wrong, so two rules are
@@ -8,6 +8,13 @@ structural rather than optional:
   for a superseded ticket is discarded, never acted on;
 * a partial transcript can only trigger a read-only, idempotent action, and only
   above a higher bar than the end-of-utterance path.
+
+There are at most two round trips per revision. "Is this addressed to the
+computer?" and "which action is it?" are different questions about the same
+state, so they go in one request; Jev answers several questions in parallel and
+bills input tokens only, which makes the filter question effectively free. The
+target question is separate because the candidate set does not exist until an
+action that needs one has been picked.
 """
 
 from __future__ import annotations
@@ -16,11 +23,15 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Sequence
 
 from .grounding import Frame, Grounder
-from .jev import Chooser
+from .jev import Chooser, boolean, choice
 from .policy import combine, gate
 from .schema import ActionSpec, Candidate, Plan, PlanKind
 
 NO_ACTION = "no_action"
+
+_ADDRESSED = "Is the transcript an instruction addressed to this computer?"
+_INTENT = "Which action does the speaker want?"
+_TARGET = "Which on-screen candidate is the speaker referring to?"
 
 
 @dataclass(frozen=True)
@@ -51,6 +62,8 @@ class VoicePipeline:
         if not self.actions:
             raise ValueError("at least one action is required")
         self._by_name = {spec.name: spec for spec in self.actions}
+        if len(self._by_name) != len(self.actions):
+            raise ValueError("action names must be unique")
         if NO_ACTION in self._by_name:
             raise ValueError(f"{NO_ACTION!r} is reserved as the reject option")
 
@@ -82,35 +95,48 @@ class VoicePipeline:
         state["transcript_is_final"] = ticket.final
 
         def superseded() -> Plan:
-            return Plan(kind=PlanKind.SUPERSEDED, reason="newer transcript arrived", trace=tuple(trace))
+            return Plan(
+                kind=PlanKind.SUPERSEDED, reason="newer transcript arrived", trace=tuple(trace)
+            )
 
+        def unmatched(reason: str, confidence: float, action: str | None = None) -> Plan:
+            # Mid-utterance there is nothing to report yet, so wait for more audio;
+            # at the end of one, say so rather than guessing.
+            return Plan(
+                kind=PlanKind.HOLD if not ticket.final else PlanKind.REJECT,
+                action=action,
+                confidence=confidence,
+                reason=reason,
+                trace=tuple(trace),
+            )
+
+        if self._stale(ticket):
+            return superseded()
+
+        options = {spec.name: spec.meaning for spec in self.actions}
+        options[NO_ACTION] = "none of these; the speaker wants something else or nothing"
+        questions = {"intent": choice(_INTENT, options)}
+        if self.command_filter:
+            questions["addressed"] = boolean(
+                _ADDRESSED,
+                true="a command meant for this machine",
+                false="thinking aloud, or talk directed at another person",
+            )
+
+        answers = self.jev.evaluate(state=state, questions=questions)
         if self._stale(ticket):
             return superseded()
 
         if self.command_filter:
-            verdict = self.jev.yes_no(
-                question="Is the transcript an instruction addressed to this computer?",
-                state=state,
-            )
-            if self._stale(ticket):
-                return superseded()
-            addressed = verdict.probabilities.get("yes", 0.0)
+            addressed = answers["addressed"].probabilities.get("yes", 0.0)
             trace.append(f"addressed={addressed:.2f}")
             if addressed < self.command_threshold:
-                kind = PlanKind.HOLD if not ticket.final else PlanKind.REJECT
-                return Plan(kind=kind, confidence=addressed, reason="not addressed to the computer", trace=tuple(trace))
+                return unmatched("not addressed to the computer", addressed)
 
-        options = [spec.name for spec in self.actions] + [NO_ACTION]
-        intent = self.jev.choose(
-            question="Which action does the speaker want?", state=state, options=options
-        )
-        if self._stale(ticket):
-            return superseded()
+        intent = answers["intent"]
         trace.append(f"intent={intent.choice}@{intent.confidence:.2f}")
-
         if intent.choice == NO_ACTION:
-            kind = PlanKind.HOLD if not ticket.final else PlanKind.REJECT
-            return Plan(kind=kind, confidence=intent.confidence, reason="no action matched", trace=tuple(trace))
+            return unmatched("no action matched", intent.confidence)
 
         spec = self._by_name[intent.choice]
         target: Candidate | None = None
@@ -121,9 +147,10 @@ class VoicePipeline:
             if self._stale(ticket):
                 return superseded()
             if target is None:
-                kind = PlanKind.HOLD if not ticket.final else PlanKind.CONFIRM
+                # Never fall through to a guessed target: acting on the wrong
+                # element is the failure mode voice control is judged on.
                 return Plan(
-                    kind=kind,
+                    kind=PlanKind.HOLD if not ticket.final else PlanKind.CONFIRM,
                     action=spec.name,
                     confidence=intent.confidence,
                     reason=reason,
@@ -142,12 +169,14 @@ class VoicePipeline:
         self,
         spec: ActionSpec,
         ticket: Ticket,
-        state: dict[str, Any],
+        state: Mapping[str, Any],
         trace: list[str],
     ) -> tuple[Candidate | None, float | None, str]:
-        """Ground the utterance to one on-screen candidate via CV, then Jev."""
-        if self.grounder is None or ticket.frame is None:
-            return None, None, "action needs a target but no grounder/frame available"
+        """Ground the utterance to one on-screen candidate, then let Jev pick."""
+        if self.grounder is None:
+            return None, None, "action needs a target but no grounder is configured"
+        if getattr(self.grounder, "needs_frame", True) and ticket.frame is None:
+            return None, None, "action needs a target but no frame was captured"
 
         candidates = list(self.grounder.ground(ticket.text, ticket.frame))
         trace.append(f"candidates={len(candidates)}")
@@ -166,11 +195,12 @@ class VoicePipeline:
             {"ref": c.ref, "label": c.label, "box": c.box, "detector_score": c.score}
             for c in candidates
         ]
-        pick = self.jev.choose(
-            question="Which candidate is the speaker pointing at?",
+        pick = self.jev.evaluate(
             state=state,
-            options=[c.ref for c in candidates],
-        )
+            questions={"target": choice(_TARGET, {c.ref: c.describe() for c in candidates})},
+        )["target"]
         trace.append(f"target={pick.choice}@{pick.confidence:.2f}")
-        chosen = next(c for c in candidates if c.ref == pick.choice)
+        chosen = next((c for c in candidates if c.ref == pick.choice), None)
+        if chosen is None:
+            return None, None, f"model picked unknown candidate {pick.choice!r}"
         return chosen, pick.confidence, ""
