@@ -160,6 +160,8 @@ class GatewayJev(_ChooserMixin):
         model: str = DEFAULT_MODEL,
         endpoint: str = DEFAULT_ENDPOINT,
         timeout: float = 2.0,
+        max_retries: int = 3,
+        sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         key = api_key or os.environ.get("AI_GATEWAY_API_KEY")
         if not key:
@@ -168,6 +170,8 @@ class GatewayJev(_ChooserMixin):
         self._model = model
         self._endpoint = endpoint
         self._timeout = timeout
+        self._max_retries = max_retries
+        self._sleep = sleep
 
     def evaluate(
         self, *, state: Mapping[str, Any], questions: Mapping[str, Question]
@@ -189,15 +193,42 @@ class GatewayJev(_ChooserMixin):
             },
         )
         started = time.perf_counter()
-        try:
-            with urllib.request.urlopen(request, timeout=self._timeout) as response:
-                payload = json.loads(response.read())
-        except urllib.error.HTTPError as exc:  # surface the body, it explains the 4xx
-            raise JevError(f"jev request failed: {exc.code}", payload=exc.read()) from exc
-        except (urllib.error.URLError, TimeoutError) as exc:
-            raise JevError(f"jev request failed: {exc}") from exc
+        payload = self._post(request)
         latency_ms = (time.perf_counter() - started) * 1000
         return _parse_response(payload, questions, latency_ms)
+
+    def _post(self, request: urllib.request.Request) -> Any:
+        """Send it, retrying only what retrying can fix.
+
+        The free tier rate-limits per model, and a 429 is not a failure of the
+        request - the same bytes succeed a moment later. Everything else is
+        raised immediately: retrying a 400 just makes the same mistake slower.
+        """
+        for attempt in range(self._max_retries + 1):
+            try:
+                with urllib.request.urlopen(request, timeout=self._timeout) as response:
+                    return json.loads(response.read())
+            except urllib.error.HTTPError as exc:
+                if exc.code != 429 or attempt == self._max_retries:
+                    # Surface the body; it is what explains a 4xx.
+                    raise JevError(f"jev request failed: {exc.code}", payload=exc.read()) from exc
+                self._sleep(_retry_after(exc.headers.get("Retry-After"), attempt))
+            except (urllib.error.URLError, TimeoutError) as exc:
+                raise JevError(f"jev request failed: {exc}") from exc
+        raise JevError("jev request failed: still rate limited after retries")
+
+
+def _retry_after(header: str | None, attempt: int) -> float:
+    """Seconds to wait. A malformed header must not collapse the wait to zero
+    and turn the retry loop into a burst of requests."""
+    backoff = 2.0**attempt
+    if not header:
+        return backoff
+    try:
+        seconds = float(header)
+    except ValueError:
+        return backoff
+    return backoff if seconds < 0 else min(seconds, 30.0)
 
 
 def _parse_response(

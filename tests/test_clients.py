@@ -1,5 +1,12 @@
+import contextlib
+import io
+import json
 import unittest
+import unittest.mock
+import urllib.error
 from typing import Any, Mapping, Sequence
+
+import jev_voice_cv.jev as jev_module
 
 from jev_voice_cv.grounding import Frame, GroundingError, Sam31Grounder, _parse_candidates
 from jev_voice_cv.jev import (
@@ -9,6 +16,7 @@ from jev_voice_cv.jev import (
     Question,
     _parse_answer,
     _parse_response,
+    _retry_after,
     boolean,
     choice,
     score,
@@ -122,6 +130,73 @@ class GatewayJevTest(unittest.TestCase):
     def test_empty_question_set_is_refused(self):
         with self.assertRaises(JevError):
             GatewayJev(api_key="k").evaluate(state={}, questions={})
+
+
+class RetryAfterTest(unittest.TestCase):
+    def test_a_sane_header_is_honoured(self):
+        self.assertEqual(_retry_after("7", 0), 7.0)
+
+    def test_a_malformed_header_cannot_collapse_the_wait(self):
+        # Zero here would turn the retry loop into a burst of requests.
+        for header in (None, "", "soon", "-1"):
+            self.assertGreaterEqual(_retry_after(header, 0), 1.0)
+
+    def test_backoff_grows_without_a_header(self):
+        self.assertEqual([_retry_after(None, i) for i in range(4)], [1.0, 2.0, 4.0, 8.0])
+
+    def test_an_absurd_header_is_capped(self):
+        self.assertEqual(_retry_after("86400", 0), 30.0)
+
+
+class _FakeHTTPError(urllib.error.HTTPError):
+    def __init__(self, code: int, retry_after: str | None = None):
+        headers = {"Retry-After": retry_after} if retry_after else {}
+        super().__init__("http://x", code, "nope", headers, io.BytesIO(b"{}"))
+
+
+class RetryTest(unittest.TestCase):
+    """429 is not a failure of the request; anything else is."""
+
+    def _client(self, responses, slept):
+        client = GatewayJev(api_key="k", max_retries=3, sleep=slept.append)
+        calls = iter(responses)
+
+        def fake_urlopen(request, timeout=None):
+            item = next(calls)
+            if isinstance(item, Exception):
+                raise item
+            return contextlib.closing(io.BytesIO(json.dumps(item).encode()))
+
+        return client, fake_urlopen
+
+    @staticmethod
+    def _ok():
+        return {"answers": {"q": {"type": "boolean", "probability": 0.8}}}
+
+    def test_a_rate_limited_request_is_retried_until_it_lands(self):
+        slept: list[float] = []
+        client, fake = self._client([_FakeHTTPError(429, "2"), self._ok()], slept)
+        with unittest.mock.patch.object(jev_module.urllib.request, "urlopen", fake):
+            answers = client.evaluate(state={}, questions={"q": boolean("Is it?")})
+        self.assertAlmostEqual(answers["q"].probabilities["yes"], 0.8)
+        self.assertEqual(slept, [2.0])
+
+    def test_retries_are_bounded(self):
+        slept: list[float] = []
+        client, fake = self._client([_FakeHTTPError(429) for _ in range(4)], slept)
+        with unittest.mock.patch.object(jev_module.urllib.request, "urlopen", fake):
+            with self.assertRaises(JevError) as caught:
+                client.evaluate(state={}, questions={"q": boolean("Is it?")})
+        self.assertIn("429", str(caught.exception))
+        self.assertEqual(slept, [1.0, 2.0, 4.0])
+
+    def test_a_bad_request_is_not_retried(self):
+        slept: list[float] = []
+        client, fake = self._client([_FakeHTTPError(400)], slept)
+        with unittest.mock.patch.object(jev_module.urllib.request, "urlopen", fake):
+            with self.assertRaises(JevError):
+                client.evaluate(state={}, questions={"q": boolean("Is it?")})
+        self.assertEqual(slept, [])
 
 
 class MockJevTest(unittest.TestCase):

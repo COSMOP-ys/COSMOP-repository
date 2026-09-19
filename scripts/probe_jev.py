@@ -28,6 +28,7 @@ import os
 import pathlib
 import statistics
 import sys
+import time
 import urllib.error
 import urllib.request
 from typing import Sequence
@@ -40,6 +41,7 @@ from jev_voice_cv.jev import (  # noqa: E402
     DEFAULT_MODEL,
     GatewayJev,
     JevError,
+    _retry_after,
     boolean,
     choice,
 )
@@ -123,11 +125,17 @@ def raw_call(key: str, state, qs) -> tuple[int, dict]:
             "ai-model-id": DEFAULT_MODEL,
         },
     )
-    try:
-        with urllib.request.urlopen(request, timeout=20) as response:
-            return response.status, json.loads(response.read())
-    except urllib.error.HTTPError as exc:
-        return exc.code, {"error_body": exc.read().decode("utf-8", "replace")}
+    for attempt in range(5):
+        try:
+            with urllib.request.urlopen(request, timeout=20) as response:
+                return response.status, json.loads(response.read())
+        except urllib.error.HTTPError as exc:
+            if exc.code != 429 or attempt == 4:
+                return exc.code, {"error_body": exc.read().decode("utf-8", "replace")}
+            wait = _retry_after(exc.headers.get("Retry-After"), attempt)
+            print(f"  429, waiting {wait:.0f}s")
+            time.sleep(wait)
+    raise AssertionError("unreachable")
 
 
 def reliability(rows: list[tuple[float, bool]]) -> str:
@@ -149,6 +157,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--raw", action="store_true", help="dump the first raw response")
     parser.add_argument("--repeats", type=int, default=3, help="latency samples")
+    parser.add_argument(
+        "--delay", type=float, default=1.2,
+        help="pause between calls; the free tier rate-limits per model",
+    )
     args = parser.parse_args(argv)
 
     key = os.environ.get("AI_GATEWAY_API_KEY") or _key_from_env_file()
@@ -181,7 +193,7 @@ def main(argv: Sequence[str] | None = None) -> int:
           f"{'' if got_probs else '   <-- policy.py needs one; check the docs'}")
 
     # 2. Latency and 3. calibration ---------------------------------------
-    jev = GatewayJev(key, timeout=20)
+    jev = GatewayJev(key, timeout=20, max_retries=4)
     latencies: list[float] = []
     intent_rows: list[tuple[float, bool]] = []
     addressed_rows: list[tuple[float, bool]] = []
@@ -198,6 +210,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print(f"  FAILED {transcript!r}: {exc}", file=sys.stderr)
                 return 1
             latencies.append(result["intent"].latency_ms or 0.0)
+            time.sleep(args.delay)
             if attempt:
                 continue
             intent, addressed = result["intent"], result["addressed"]
