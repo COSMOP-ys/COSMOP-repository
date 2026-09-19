@@ -173,6 +173,43 @@ in parallel in one request — so the filter question costs a few input tokens a
 no latency. The target question has to be separate: its option set does not
 exist until an action that needs a target has been chosen.
 
+## What the probabilities actually look like
+
+24 labelled utterances, batched, 2026-09-19. Small, one sample, and see the
+caveat in `batched()` — but the shape is unambiguous:
+
+```
+intent    88% correct (21/24)        addressed  92% correct
+  reported     n   said  right         reported     n   said  right
+  0.95-1.00   21   1.00   0.90         0.70-0.85   11   0.80   0.91
+  0.85-0.95    1   0.91   1.00         0.85-0.95   10   0.90   1.00
+  0.50-0.70    1   0.68   0.00         0.95-1.00    2   0.96   1.00
+```
+
+**The intent axis is saturated.** Twenty-one of twenty-four answers report
+1.00, and one in ten of those is wrong. Every `execute_threshold` between 0.70
+and 0.99 therefore admits exactly the same set — on the intent axis the dial is
+close to a no-op, and a wrong answer arrives wearing the same 1.00 as a right
+one. Two of the three misses were reported at 0.98 and 1.00.
+
+**The boolean is the axis with real gradation**, and it is roughly calibrated:
+0.80 → 91% right, 0.90 → 100%. It is also lower than you would guess on
+obviously-addressed commands, so `command_threshold = 0.60` has less headroom
+than it looks.
+
+What this says about the design: the safety comes from the structure, not from
+the number. Look at what caught the two dangerous misses.
+
+- `"she said we should delete the whole thing"` → `delete_element` at **0.98**,
+  comfortably past delete's 0.95 bar. Stopped by `always_confirm`, and by the
+  addressed filter. Not by the confidence.
+- `"scroll to the"` (a fragment) → `scroll_to_element` at **1.00**, past
+  scroll's 0.88 speculation bar. Stopped only because "the" grounds to nothing.
+
+Rules 1, 4 and the command filter are load-bearing; the per-action thresholds
+are mostly not, at least on this evidence. Do not treat a Jev choice
+probability as a measure of whether the answer is right.
+
 ## What to measure
 
 Measure these three separately, or ASR failures get blamed on Jev and vice versa:

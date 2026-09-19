@@ -4,6 +4,17 @@ This module is where voice-operation accuracy is actually won. Jev guarantees
 the answer fits the schema, not that the answer is right - a type-valid
 decision can still be semantically wrong. So every decision passes a gate that
 is sized to the cost of that action being wrong.
+
+MEASURED, 2026-09-19, and it matters for how much these thresholds buy you: on
+a 24-case labelled set, 21 of 24 intent answers came back reporting 1.00, and
+one in ten of those was wrong. On the intent axis the probability is saturated,
+so every `execute_threshold` between 0.70 and 0.99 admits the same set, and a
+wrong answer looks exactly like a right one. What actually stopped the two
+dangerous cases was `always_confirm`, the read-only-only speculation rule, and
+having no grounded target - structure, not the number. The boolean command
+filter and the grounding score are the two inputs here that do vary. Treat the
+thresholds as a policy statement about what may run unattended, not as a
+statistical filter, until you have recalibrated on your own traffic.
 """
 
 from __future__ import annotations
