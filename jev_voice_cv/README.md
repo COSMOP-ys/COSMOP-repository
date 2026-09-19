@@ -24,7 +24,7 @@ speech ─▶ ASR ─▶ Jev, one request, two questions:
 | Speech recognition | **Unchanged.** Jev takes no audio; your ASR is still your ASR |
 | Intent → action | **Better.** The answer cannot leave the enumerated set, so no invented action names and nothing to parse |
 | Utterance → on-screen target | **Better, and this is the new part.** The DOM (or SAM 3.1) turns "the red submit button" into concrete candidates; Jev picks one of them instead of a coordinate being guessed |
-| Free-form arguments (note body, search string) | **Not covered.** Jev generates no text; `needs_text_arg` routes that to a small LLM, and `plan.with_text(...)` carries the result |
+| Free-form arguments (note body, search string) | **Covered, for dictated content.** The text is almost always a run of words the speaker already said, so those runs are enumerated locally and Jev picks one - a one-of-N, not generation. Text that needs rewriting still needs a model that writes |
 | Wrong action actually firing | **Better, if you use the probabilities.** Per-action thresholds, destructive actions always confirming, and read-only-only speculation are what buy this — not the model by itself |
 
 ## Run it
@@ -32,7 +32,7 @@ speech ─▶ ASR ─▶ Jev, one request, two questions:
 ```sh
 python -m jev_voice_cv.cli                       # offline demo, no keys
 python -m jev_voice_cv.web.server --offline      # voice console on :8765, no keys
-python -m unittest discover -s tests -t .        # 99 tests, stdlib only
+python -m unittest discover -s tests -t .        # 147 tests, stdlib only
 ```
 
 With a key in `.env.local` (gitignored), two probes answer the questions that
@@ -40,6 +40,7 @@ only a live call can:
 
 ```sh
 python scripts/probe_jev.py --batched   # wire format, latency, calibration table
+python scripts/probe_clarity.py         # does the score question separate right from wrong
 python scripts/probe_ratelimit.py       # how many calls the tier actually serves
 ```
 
@@ -52,7 +53,7 @@ browser tests, which skip cleanly when it is absent:
 
 ```sh
 python -m venv .venv && .venv/Scripts/python -m pip install playwright
-.venv/Scripts/python -m unittest tests.test_browser   # 13 tests, real browser
+.venv/Scripts/python -m unittest tests.test_browser   # 18 tests, real browser
 ```
 
 ### The voice console
@@ -135,6 +136,36 @@ from `navigator.language`.
 This generalises to Chinese and Korean about as far as the heuristic does: Han
 runs and bigrams are the same machinery, but the stopword and synonym lists are
 Japanese, so treat those as the part to extend.
+
+## Getting the dictated words without generating any
+
+Jev returns choices and never prose, so "メールアドレスに山田太郎と入力して"
+leaves the pipeline knowing the action and the field and not the name. The
+usual fix is a second, smaller language model - another provider, another
+latency budget, and another thing that can invent the contents of what you are
+about to type.
+
+There is a cheaper one. The dictated text is nearly always a contiguous run of
+words the speaker already said, so `extract.py` enumerates those runs locally
+and asks Jev which one it is. That is a one-of-N over a closed set, the shape
+it answers, and **the answer is a substring of the transcript by
+construction** - nothing in the path can produce a character the speaker did
+not say. It rides in the same request as the target question, so it costs
+tokens and no round trip.
+
+```
+メールアドレスに山田太郎と入力して
+  -> type_text, target textbox "メールアドレス", text '山田太郎'
+type hello world into the email box
+  -> type_text, target textbox "Email",         text 'hello world'
+メールアドレスに入力して
+  -> confirm: nothing in the utterance is the text to enter
+```
+
+That last line is the same rule as a missing target: an action that needs
+content and has none asks for it rather than running and failing at the last
+step. `NO_TEXT` is always in the option set, so "not in what was said" is an
+answer Jev can give.
 
 ## Wiring the real APIs
 
@@ -345,7 +376,7 @@ no-training; that covers the provider path, not your own logs.
 
 - **One action per utterance.** "Open notes *and* create a list" resolves to
   `open_app` only; chaining needs a sequence decision or a planner above Jev.
-- **No free-text extraction.** `needs_text_arg` marks where a small LLM goes.
+- **Text that is not contiguous in the transcript** cannot be extracted as a span, and neither can text that needs rewriting - spelling out an address, turning "at" into "@". `NO_TEXT` covers the first by asking; the second still wants a model that writes.
 - **Synchronous by design.** `submit`/`resolve` are split so the staleness rules
   survive a move to async, but there is no event loop here yet.
 - **Web Speech API** is Chrome/Edge only and sends audio to their speech

@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import pathlib
 import unittest
+from dataclasses import replace
 from typing import Any, Mapping, Sequence
 
+from jev_voice_cv import extract
 from jev_voice_cv.dom import DomGrounder
 from jev_voice_cv.jev import MockJev
 from jev_voice_cv.pipeline import VoicePipeline
@@ -51,10 +53,14 @@ def _launch(playwright):
     return None
 
 
-def decide(action: str, *, intent_p: float = 0.99, target_p: float = 0.99):
+def decide(action: str, *, intent_p: float = 0.99, target_p: float = 0.99,
+           span: str | None = None):
     def handler(question: str, state: Mapping[str, Any], options: Sequence[str]) -> Decision:
         if list(options) == ["yes", "no"]:
             return Decision("yes", {"yes": 0.99, "no": 0.01})
+        if extract.NO_TEXT in options:
+            picked = span if span in options else extract.NO_TEXT
+            return Decision(picked, {o: 0.9 if o == picked else 0.0 for o in options})
         if "candidate" in question.lower():
             rest = (1 - target_p) / max(len(options) - 1, 1)
             return Decision(options[0], {o: target_p if i == 0 else rest
@@ -147,18 +153,38 @@ class BrowserTest(unittest.TestCase):
         PlaywrightExecutor(self.page).run(plan)
         self.assertGreater(self.page.evaluate("window.scrollY"), 500)
 
-    def test_typing_lands_in_the_grounded_field(self):
-        pipeline = self.pipeline(TYPE, decide("type_text"))
-        plan = pipeline.resolve(pipeline.submit("type into the email box", final=True))
+    def test_the_dictated_words_land_in_the_grounded_field(self):
+        # No with_text(): the span comes out of the transcript itself.
+        pipeline = self.pipeline(TYPE, decide("type_text", span="hello world"))
+        plan = pipeline.resolve(
+            pipeline.submit("type hello world into the email box", final=True)
+        )
         self.assertIs(plan.kind, PlanKind.EXECUTE)
+        self.assertEqual(plan.text_arg, "hello world")
+        PlaywrightExecutor(self.page).run(plan)
+        self.assertEqual(self.page.input_value("#email"), "hello world")
+
+    def test_a_caller_can_still_supply_the_text_itself(self):
+        pipeline = self.pipeline(TYPE, decide("type_text", span="hello world"))
+        plan = pipeline.resolve(
+            pipeline.submit("type hello world into the email box", final=True)
+        )
         PlaywrightExecutor(self.page).run(plan.with_text("someone@example.com"))
         self.assertEqual(self.page.input_value("#email"), "someone@example.com")
 
-    def test_text_action_without_its_text_refuses_to_run(self):
+    def test_an_utterance_with_nothing_dictated_asks_rather_than_running(self):
         pipeline = self.pipeline(TYPE, decide("type_text"))
         plan = pipeline.resolve(pipeline.submit("type into the email box", final=True))
+        self.assertIs(plan.kind, PlanKind.CONFIRM)
+        self.assertEqual(plan.reason, "nothing in the utterance is the text to enter")
+
+    def test_a_text_action_reaching_the_executor_without_text_still_refuses(self):
+        pipeline = self.pipeline(TYPE, decide("type_text", span="hello world"))
+        plan = pipeline.resolve(
+            pipeline.submit("type hello world into the email box", final=True)
+        )
         with self.assertRaises(ExecutionError):
-            PlaywrightExecutor(self.page).run(plan)
+            PlaywrightExecutor(self.page).run(replace(plan, text_arg=None))
 
     def test_a_target_that_left_the_page_fails_instead_of_hitting_its_replacement(self):
         pipeline = self.pipeline(CLICK, decide("click_element"))

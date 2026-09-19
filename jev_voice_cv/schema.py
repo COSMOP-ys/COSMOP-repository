@@ -109,6 +109,6 @@ class Plan:
     def runnable(self) -> bool:
         return self.kind in (PlanKind.EXECUTE, PlanKind.SPECULATE)
 
-    def with_text(self, text: str) -> "Plan":
-        """Attach the free-form argument this action needs."""
-        return replace(self, text_arg=text)
+    def with_text(self, text: str, *, source: str = "caller") -> "Plan":
+        """Attach the free-form argument this action needs, and say where from."""
+        return replace(self, text_arg=text, text_arg_from=source)

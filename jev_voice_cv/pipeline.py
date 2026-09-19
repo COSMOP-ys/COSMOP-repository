@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Sequence
 
 from .grounding import Frame, Grounder
+from . import extract
 from .jev import Chooser, boolean, choice, score
 from .policy import combine, gate
 from .schema import ActionSpec, Candidate, Plan, PlanKind
@@ -82,6 +83,10 @@ class VoicePipeline:
     # at 1.00 - while costing only unfinished fragments. That is 18 answers and
     # four misses, so calibrate it before trusting it.
     clarity_floor: float | None = None
+    # Pull the dictated text out of the transcript as a span Jev selects, rather
+    # than routing it to a model that writes. See extract.py for what that buys
+    # and what it cannot do.
+    text_extraction: bool = True
 
     _seq: int = field(default=0, init=False)
 
@@ -174,12 +179,16 @@ class VoicePipeline:
         spec = self._by_name[intent.choice]
         target: Candidate | None = None
         target_confidence: float | None = None
+        text_arg: str | None = None
+
+        # Both remaining questions become answerable the moment the action is
+        # known, and neither depends on the other, so they share one request.
+        followups: dict[str, Any] = {}
+        candidates: list[Candidate] = []
 
         if spec.needs_target:
-            target, target_confidence, reason = self._resolve_target(spec, ticket, state, trace)
-            if self._stale(ticket):
-                return superseded()
-            if target is None:
+            candidates, reason = self._shortlist(ticket, trace)
+            if not candidates:
                 # Never fall through to a guessed target: acting on the wrong
                 # element is the failure mode voice control is judged on.
                 return Plan(
@@ -189,8 +198,68 @@ class VoicePipeline:
                     reason=reason,
                     trace=tuple(trace),
                 )
+            if len(candidates) == 1:
+                target = candidates[0]
+                # A single match still carries the detector's own uncertainty.
+                target_confidence = target.score if target.score is not None else 1.0
+            else:
+                followups["target"] = choice(
+                    _TARGET, {c.ref: c.describe() for c in candidates}
+                )
 
-        return gate(
+        span_options: dict[str, str] = {}
+        if spec.needs_text_arg and self.text_extraction:
+            span_options = extract.options(ticket.text)
+            if len(span_options) > 1:
+                followups["text"] = choice(extract.question_for(spec.meaning), span_options)
+
+        if followups:
+            if self._stale(ticket):
+                return superseded()
+            asked = dict(state)
+            if candidates:
+                asked["candidates"] = [
+                    {"ref": c.ref, "label": c.label, "box": c.box, "detector_score": c.score}
+                    for c in candidates
+                ]
+            answers = self.jev.evaluate(state=asked, questions=followups)
+            if self._stale(ticket):
+                return superseded()
+
+            if "target" in answers:
+                pick = answers["target"]
+                trace.append(f"target={pick.choice}@{pick.confidence:.2f}")
+                target = next((c for c in candidates if c.ref == pick.choice), None)
+                if target is None:
+                    return Plan(
+                        kind=PlanKind.HOLD if not ticket.final else PlanKind.CONFIRM,
+                        action=spec.name,
+                        confidence=intent.confidence,
+                        reason=f"model picked unknown candidate {pick.choice!r}",
+                        trace=tuple(trace),
+                    )
+                target_confidence = pick.confidence
+
+            if "text" in answers:
+                text_arg = extract.resolve(answers["text"].choice, span_options)
+                trace.append(
+                    f"text={text_arg!r}" if text_arg else "text=not in the utterance"
+                )
+
+        if spec.needs_text_arg and self.text_extraction and text_arg is None:
+            # Same rule as a missing target: an action that needs content and
+            # has none must ask for it, not run and fail at the last step.
+            return Plan(
+                kind=PlanKind.HOLD if not ticket.final else PlanKind.CONFIRM,
+                action=spec.name,
+                target=target,
+                confidence=intent.confidence,
+                reason="nothing in the utterance is the text to enter",
+                text_arg_from="llm",
+                trace=tuple(trace),
+            )
+
+        plan = gate(
             spec,
             combine(intent.confidence, target_confidence),
             final=ticket.final,
@@ -199,43 +268,14 @@ class VoicePipeline:
             clarity=clarity,
             clarity_floor=self.clarity_floor,
         )
+        return plan.with_text(text_arg, source="transcript-span") if text_arg else plan
 
-    def _resolve_target(
-        self,
-        spec: ActionSpec,
-        ticket: Ticket,
-        state: Mapping[str, Any],
-        trace: list[str],
-    ) -> tuple[Candidate | None, float | None, str]:
-        """Ground the utterance to one on-screen candidate, then let Jev pick."""
+    def _shortlist(self, ticket: Ticket, trace: list[str]) -> tuple[list[Candidate], str]:
+        """Everything on screen the utterance could plausibly mean."""
         if self.grounder is None:
-            return None, None, "action needs a target but no grounder is configured"
+            return [], "action needs a target but no grounder is configured"
         if getattr(self.grounder, "needs_frame", True) and ticket.frame is None:
-            return None, None, "action needs a target but no frame was captured"
-
+            return [], "action needs a target but no frame was captured"
         candidates = list(self.grounder.ground(ticket.text, ticket.frame))
         trace.append(f"candidates={len(candidates)}")
-        if not candidates:
-            return None, None, "no grounded target"
-        if len(candidates) == 1:
-            only = candidates[0]
-            # A single match still carries the detector's own uncertainty.
-            return only, only.score if only.score is not None else 1.0, ""
-
-        if self._stale(ticket):
-            return None, None, "superseded"
-
-        state = dict(state)
-        state["candidates"] = [
-            {"ref": c.ref, "label": c.label, "box": c.box, "detector_score": c.score}
-            for c in candidates
-        ]
-        pick = self.jev.evaluate(
-            state=state,
-            questions={"target": choice(_TARGET, {c.ref: c.describe() for c in candidates})},
-        )["target"]
-        trace.append(f"target={pick.choice}@{pick.confidence:.2f}")
-        chosen = next((c for c in candidates if c.ref == pick.choice), None)
-        if chosen is None:
-            return None, None, f"model picked unknown candidate {pick.choice!r}"
-        return chosen, pick.confidence, ""
+        return (candidates, "") if candidates else ([], "no grounded target")

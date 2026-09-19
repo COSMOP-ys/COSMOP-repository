@@ -174,10 +174,8 @@ const HANDLERS = {
     if (!text) throw new Error('type_text needs text and none was dictated');
     field.focus();
     field.value = text;
-    // The whole transcript, because Jev returns choices and never prose. A
-    // real system extracts the dictated part with a small LLM; this shows you
-    // exactly where that piece is missing.
-    return 'typed the raw transcript into ' + (field.id || 'the focused field');
+    const how = plan.text_from === 'transcript-span' ? '' : ' (raw transcript)';
+    return 'typed “' + text + '”' + how + ' into ' + (field.id || 'the focused field');
   },
 };
 
@@ -198,8 +196,10 @@ function apply(plan, transcript) {
   if (!shouldRun(plan)) { note('skip (already ran): ' + plan.action); return; }
   try {
     const node = plan.target ? locate(plan.target.ref) : null;
+    // plan.text is the span Jev picked out of the transcript; falling back to
+    // the whole thing makes it obvious when nothing was extracted.
     note((plan.kind === 'speculate' ? 'speculate: ' : 'execute: ') +
-         handler(node, plan, transcript));
+         handler(node, plan, plan.text || transcript));
   } catch (err) {
     note('failed: ' + err.message);
   }

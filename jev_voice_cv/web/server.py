@@ -24,7 +24,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Mapping, Sequence
 
 from ..actions import BROWSER_ACTIONS
-from ..dom import DOM_SNAPSHOT_JS, DomGrounder, DomNode
+from .. import extract
+from ..dom import _IGNORED, DOM_SNAPSHOT_JS, DomGrounder, DomNode
 from ..jev import GatewayJev, Question
 from ..pipeline import NO_ACTION, VoicePipeline
 from ..schema import Decision, Plan
@@ -79,10 +80,12 @@ class OfflineChooser:
                 p = 0.08 if any(c in text for c in self._NOT_A_COMMAND) else 0.93
                 answers[key] = Decision("yes" if p >= 0.5 else "no", {"yes": p, "no": 1 - p})
             else:
-                answers[key] = self._pick(text, list(question.criteria or []))
+                answers[key] = self._pick(text, list(question.criteria or []), state)
         return answers
 
-    def _pick(self, text: str, options: Sequence[str]) -> Decision:
+    def _pick(self, text: str, options: Sequence[str], state: Mapping[str, Any]) -> Decision:
+        if extract.NO_TEXT in options:
+            return self._pick_span(options, state)
         # Longest cue wins, not first-listed. "スクロールして保存を押して" matches two
         # actions, and answering with whichever happens to come first in the
         # action list is a coin toss dressed up as a decision.
@@ -106,6 +109,39 @@ class OfflineChooser:
         return Decision(winner, probabilities, latency_ms=0.0)
 
 
+    def _pick_span(self, options: Sequence[str], state: Mapping[str, Any]) -> Decision:
+        """Which span is the dictated text, for a stub that cannot read.
+
+        The heuristic is the definition restated: the text is the part that is
+        neither the command nor the name of the thing it acts on. So drop any
+        span containing a cue word or a word from a candidate label, and take
+        the longest of what survives.
+        """
+        cues = [c for group in self._CUES.values() for c in group]
+        labels = " ".join(
+            str(c.get("label", "")) for c in state.get("candidates", []) or []
+        ).lower()
+        label_pieces = {m.group() for m in extract._PIECE.finditer(labels)}
+
+        def is_content(span: str) -> bool:
+            low = span.lower()
+            if any(cue in low for cue in cues):
+                return False
+            pieces = [m.group().lower() for m in extract._PIECE.finditer(span)]
+            if not pieces or set(pieces) & label_pieces:
+                return False
+            # A span that starts or ends on a particle or an article is a slice
+            # of the sentence, not the thing that was dictated.
+            return pieces[0] not in _IGNORED and pieces[-1] not in _IGNORED
+
+        spans = [o for o in options if o != extract.NO_TEXT]
+        winner = next((s for s in spans if is_content(s)), extract.NO_TEXT)
+        spare = 0.04 / max(len(options) - 1, 1)
+        return Decision(
+            winner, {o: (0.96 if o == winner else spare) for o in options}, latency_ms=0.0
+        )
+
+
 def plan_to_json(plan: Plan) -> dict[str, Any]:
     return {
         "kind": plan.kind.value,
@@ -114,6 +150,8 @@ def plan_to_json(plan: Plan) -> dict[str, Any]:
         "reason": plan.reason,
         "runnable": plan.runnable,
         "needs_text": bool(plan.text_arg_from),
+        "text": plan.text_arg,
+        "text_from": plan.text_arg_from,
         "target": None
         if plan.target is None
         else {"ref": plan.target.ref, "label": plan.target.label, "score": plan.target.score},
