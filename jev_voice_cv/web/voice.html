@@ -193,17 +193,40 @@ let inFlight = 0;
 
 async function send(text, final) {
   const mine = ++inFlight;
-  const response = await fetch('/resolve', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, final, nodes: snapshot() }),
-  });
-  const plan = await response.json();
+  let plan;
+  try {
+    const response = await fetch('/resolve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, final, nodes: snapshot() }),
+    });
+    plan = await response.json();
+    if (!response.ok && !plan.reason) plan.reason = 'HTTP ' + response.status;
+  } catch (err) {
+    // A voice interface that silently stops answering is indistinguishable
+    // from one that is thinking. Say so instead - the server being restarted
+    // under an open page is exactly how this happens.
+    if (mine !== inFlight) return;
+    fail(text, final, String(err && err.message || err));
+    return;
+  }
   // The server supersedes by sequence too; this just keeps the UI honest when
   // answers come back out of order.
   if (mine !== inFlight) return;
   render(plan, text);
   apply(plan, text);
+}
+
+function fail(text, final, detail) {
+  const kind = el('kind');
+  kind.textContent = 'no answer';
+  kind.className = 'verdict reject';
+  el('summary').textContent = 'the console could not reach the server - ' + detail;
+  el('trace').textContent = '';
+  note('failed: ' + detail);
+  // Give the words back rather than swallowing them.
+  const input = el('transcript');
+  if (final && !input.value) input.value = text;
 }
 
 function render(plan, text) {
