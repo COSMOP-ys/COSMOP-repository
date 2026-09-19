@@ -32,8 +32,20 @@ speech ─▶ ASR ─▶ Jev, one request, two questions:
 ```sh
 python -m jev_voice_cv.cli                       # offline demo, no keys
 python -m jev_voice_cv.web.server --offline      # voice console on :8765, no keys
-python -m unittest discover -s tests -t .        # 92 tests, stdlib only
+python -m unittest discover -s tests -t .        # 99 tests, stdlib only
 ```
+
+With a key in `.env.local` (gitignored), two probes answer the questions that
+only a live call can:
+
+```sh
+python scripts/probe_jev.py --batched   # wire format, latency, calibration table
+python scripts/probe_ratelimit.py       # how many calls the tier actually serves
+```
+
+`--batched` folds the whole labelled set into one request, because the free
+tier will not serve 24. It is a shape check, not the request the pipeline
+sends: see the docstring for why the two differ.
 
 The package is stdlib-only. Playwright is needed for `playwright_exec` and the
 browser tests, which skip cleanly when it is absent:
@@ -103,11 +115,47 @@ high; a word every button shares does not.
 AI SDK only" — there is no published REST endpoint. The request in `jev.py` was
 derived from the AI SDK's own gateway provider (`@ai-sdk/gateway@4.0.87`,
 `getUrl()` → `${baseURL}/evaluation-model`, body `{state, questions}`, headers
-`ai-evaluation-model-specification-version: 4` and `ai-model-id`) and confirmed
-against the live service: unauthenticated it answers 401 `authentication_error`,
-and one character off the path it answers 404. Undocumented means it can move
-without notice — `DEFAULT_ENDPOINT` and `_parse_answer` are the two places to
-re-check. Nothing in `policy.py` or `pipeline.py` depends on either.
+`ai-evaluation-model-specification-version: 4` and `ai-model-id`), and **it
+works** — 200 against the live service, verified 2026-09-19:
+
+```json
+{"answers": {"intent":    {"type": "choice", "choice": "click_element",
+                           "probabilities": {"click_element": 1, "open_app": 0, ...}},
+             "addressed": {"type": "boolean", "probability": 0.64}},
+ "rounding": {"probabilityDecimals": 2, "scoreDecimals": 2},
+ "usage":    {"inputTokens": 553, "outputTokens": 109}}
+```
+
+`choice` returns the full distribution `policy.py` gates on, probabilities come
+back rounded to two decimals, and `providerMetadata.gateway.cost` was `"0"`
+against a `marketCost` of `$0.0000232` for that call. Undocumented still means
+it can move without notice — `DEFAULT_ENDPOINT` and `_parse_answer` are the two
+places to re-check. Nothing in `policy.py` or `pipeline.py` depends on either.
+
+**Getting a key costs nothing but is not frictionless.** AI Gateway refuses
+every request with 403 `customer_verification_required` until a card is on
+file, free credits included. Adding the card is enough; buying credits ends the
+monthly free credit for good.
+
+**"Free" is about money, not about throughput.** Vercel publishes no rate-limit
+numbers ("this page describes behavior rather than fixed numbers"), so
+`scripts/probe_ratelimit.py` measures them. On the free tier, 2026-09-19:
+
+```
+ 4 calls served back to back, 429 on the 5th
+ ~165 s before the limit cleared
+ p50 413 ms per call (min 379, max 509)
+```
+
+Roughly **four requests every three minutes**. That is fine for trying it out
+and useless for anything that decides per utterance — this pipeline sends one
+request per transcript revision, several per second while someone is speaking.
+Any real workload needs purchased credits, which is the same switch that ends
+the $5/month free credit. Budget for the paid tier or do not plan around Jev.
+
+The 413 ms is worth noting on its own: it sits at the slow end of the advertised
+70–500 ms, and it is the round trip the speculation design spends on every
+partial transcript.
 
 **The SAM transport is still unverified**: developer.meta.com was unreachable
 when this was written, so check `grounding.py`'s `DEFAULT_ENDPOINT`, request

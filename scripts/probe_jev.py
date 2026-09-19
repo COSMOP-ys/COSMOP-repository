@@ -109,6 +109,48 @@ def questions():
     }
 
 
+def batched(jev: GatewayJev):
+    """Every case in one request.
+
+    Jev answers several questions against one shared state, which turns 24
+    round trips into 1 - the difference between fitting inside the free tier's
+    rate limit and not. The catch is that it stops being the request the
+    pipeline sends: all 24 transcripts are in view at once, and a model that
+    can see the others may answer differently about any one of them. Enough to
+    see the shape of the distribution; not a substitute for measuring real
+    traffic one utterance at a time.
+    """
+    options = {spec.name: spec.meaning for spec in BROWSER_ACTIONS}
+    options[NO_ACTION] = "none of these; the speaker wants something else or nothing"
+    state = {"utterances": {f"u{i}": text for i, (text, _, _) in enumerate(CASES)}}
+
+    qs = {}
+    for i in range(len(CASES)):
+        qs[f"intent_{i}"] = choice(f"Considering only utterance u{i}: {INTENT}", options)
+        qs[f"addressed_{i}"] = boolean(
+            f"Considering only utterance u{i}: {ADDRESSED}",
+            true="a command meant for this machine",
+            false="thinking aloud, or talk directed at another person",
+        )
+
+    result = jev.evaluate(state=state, questions=qs)
+    latencies = [result["intent_0"].latency_ms or 0.0]
+    intent_rows: list[tuple[float, bool]] = []
+    addressed_rows: list[tuple[float, bool]] = []
+    wrong: list[str] = []
+    for i, (text, expected, is_addressed) in enumerate(CASES):
+        intent = result[f"intent_{i}"]
+        ok = intent.choice == expected
+        intent_rows.append((intent.confidence, ok))
+        p_yes = result[f"addressed_{i}"].probabilities.get("yes", 0.0)
+        addressed_rows.append((max(p_yes, 1 - p_yes), (p_yes >= 0.5) == is_addressed))
+        if not ok:
+            wrong.append(
+                f"    {text!r}: said {intent.choice}@{intent.confidence:.2f}, expected {expected}"
+            )
+    return latencies, intent_rows, addressed_rows, wrong
+
+
 def raw_call(key: str, state, qs) -> tuple[int, dict]:
     """One unparsed call, so the response shape can be inspected as it arrives."""
     body = json.dumps(
@@ -125,12 +167,12 @@ def raw_call(key: str, state, qs) -> tuple[int, dict]:
             "ai-model-id": DEFAULT_MODEL,
         },
     )
-    for attempt in range(5):
+    for attempt in range(10):
         try:
-            with urllib.request.urlopen(request, timeout=20) as response:
+            with urllib.request.urlopen(request, timeout=30) as response:
                 return response.status, json.loads(response.read())
         except urllib.error.HTTPError as exc:
-            if exc.code != 429 or attempt == 4:
+            if exc.code != 429 or attempt == 9:
                 return exc.code, {"error_body": exc.read().decode("utf-8", "replace")}
             wait = _retry_after(exc.headers.get("Retry-After"), attempt)
             print(f"  429, waiting {wait:.0f}s")
@@ -160,6 +202,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--delay", type=float, default=1.2,
         help="pause between calls; the free tier rate-limits per model",
+    )
+    parser.add_argument(
+        "--batched", action="store_true",
+        help="ask about every case in one request, to fit inside the free tier",
     )
     args = parser.parse_args(argv)
 
@@ -193,11 +239,20 @@ def main(argv: Sequence[str] | None = None) -> int:
           f"{'' if got_probs else '   <-- policy.py needs one; check the docs'}")
 
     # 2. Latency and 3. calibration ---------------------------------------
-    jev = GatewayJev(key, timeout=20, max_retries=4)
+    jev = GatewayJev(key, timeout=30, max_retries=10)
     latencies: list[float] = []
     intent_rows: list[tuple[float, bool]] = []
     addressed_rows: list[tuple[float, bool]] = []
     wrong: list[str] = []
+
+    if args.batched:
+        print(f"\n{len(CASES)} cases in one request ({2 * len(CASES)} questions)")
+        try:
+            rows = batched(jev)
+        except JevError as exc:
+            print(f"  batched request failed: {exc}", file=sys.stderr)
+            return 1
+        return report(*rows)
 
     print(f"\n{len(CASES)} cases x {args.repeats} repeats")
     for transcript, expected, is_addressed in CASES:
@@ -224,6 +279,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 wrong.append(f"    {transcript!r}: said {intent.choice}@{intent.confidence:.2f}, "
                              f"expected {expected}")
 
+    return report(latencies, intent_rows, addressed_rows, wrong)
+
+
+def report(latencies, intent_rows, addressed_rows, wrong) -> int:
     print(f"\nlatency  p50 {statistics.median(latencies):6.0f} ms   "
           f"min {min(latencies):.0f}   max {max(latencies):.0f}   n={len(latencies)}")
 
