@@ -197,3 +197,47 @@ class ExecutorTest(unittest.TestCase):
         plan = pipeline.resolve(pipeline.submit("hello", final=True))
         with self.assertRaises(ValueError):
             DryRunExecutor().run(plan)
+
+
+class ClarityQuestionTest(unittest.TestCase):
+    """The clarity score rides along in the request already being sent."""
+
+    @staticmethod
+    def _jev(clarity: float):
+        def handler(question, state, options):
+            if list(options) == ["yes", "no"]:
+                return Decision("yes", {"yes": 0.99, "no": 0.01})
+            if "clearly" in question:
+                # A score answer: the rungs are the options, the position is
+                # what the gate reads.
+                return Decision(options[-1], {o: 1.0 if i == len(options) - 1 else 0.0
+                                              for i, o in enumerate(options)},
+                                score=clarity)
+            return flat("open_app", 1.0, options)
+
+        return MockJev(handler)
+
+    def test_the_question_is_not_asked_unless_a_floor_is_set(self):
+        jev = self._jev(4.0)
+        pipeline = VoicePipeline(actions=[OPEN], jev=jev)
+        pipeline.resolve(pipeline.submit("open the notes app", final=True))
+        self.assertEqual(jev.batches, [["intent", "addressed"]])
+
+    def test_it_shares_the_request_rather_than_costing_a_round_trip(self):
+        jev = self._jev(4.0)
+        pipeline = VoicePipeline(actions=[OPEN], jev=jev, clarity_floor=2.5)
+        plan = pipeline.resolve(pipeline.submit("open the notes app", final=True))
+        self.assertEqual(jev.batches, [["intent", "addressed", "clarity"]])
+        self.assertIs(plan.kind, PlanKind.EXECUTE)
+
+    def test_a_confident_but_unclear_answer_is_confirmed_not_run(self):
+        pipeline = VoicePipeline(actions=[OPEN], jev=self._jev(2.2), clarity_floor=2.5)
+        plan = pipeline.resolve(pipeline.submit("open the", final=True))
+        self.assertIs(plan.kind, PlanKind.CONFIRM)
+        self.assertEqual(plan.reason, "below the clarity floor")
+        self.assertEqual(plan.confidence, 1.0)  # the probability said it was certain
+
+    def test_the_score_shows_up_in_the_trace(self):
+        pipeline = VoicePipeline(actions=[OPEN], jev=self._jev(3.4), clarity_floor=2.5)
+        plan = pipeline.resolve(pipeline.submit("open the notes app", final=True))
+        self.assertIn("clarity=3.40", plan.trace)

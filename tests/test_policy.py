@@ -66,3 +66,47 @@ class ActionSpecTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             ActionSpec("bad", read_only=True, idempotent=True,
                        execute_threshold=0.9, speculate_threshold=0.9)
+
+
+class ClarityFloorTest(unittest.TestCase):
+    """The second question exists because the first one does not vary.
+
+    Jev's choice probability comes back at 1.00 for nearly everything,
+    including wrong answers, so these cases are the ones a threshold on it
+    cannot reach.
+    """
+
+    SCROLL = ActionSpec("scroll", read_only=True, idempotent=True,
+                        execute_threshold=0.70, speculate_threshold=0.88)
+    DELETE = ActionSpec("delete", always_confirm=True, execute_threshold=0.95)
+
+    def test_a_confident_but_unclear_answer_asks_instead_of_running(self):
+        plan = gate(self.SCROLL, 1.0, final=True, clarity=2.21, clarity_floor=2.5)
+        self.assertIs(plan.kind, PlanKind.CONFIRM)
+        self.assertEqual(plan.reason, "below the clarity floor")
+
+    def test_the_same_answer_runs_once_it_is_clear(self):
+        plan = gate(self.SCROLL, 1.0, final=True, clarity=3.85, clarity_floor=2.5)
+        self.assertIs(plan.kind, PlanKind.EXECUTE)
+
+    def test_an_unclear_partial_is_held_rather_than_speculated(self):
+        # "scroll to the" scored 1.00 on choice and 2.21 on clarity: without
+        # the floor this speculates, because scroll is read-only.
+        plan = gate(self.SCROLL, 1.0, final=False, clarity=2.21, clarity_floor=2.5)
+        self.assertIs(plan.kind, PlanKind.HOLD)
+
+    def test_a_clear_partial_still_speculates(self):
+        plan = gate(self.SCROLL, 1.0, final=False, clarity=3.9, clarity_floor=2.5)
+        self.assertIs(plan.kind, PlanKind.SPECULATE)
+
+    def test_the_floor_does_not_override_always_confirm(self):
+        plan = gate(self.DELETE, 1.0, final=True, clarity=3.9, clarity_floor=2.5)
+        self.assertIs(plan.kind, PlanKind.CONFIRM)
+        self.assertEqual(plan.reason, "action always requires confirmation")
+
+    def test_no_floor_means_the_score_is_ignored(self):
+        self.assertIs(gate(self.SCROLL, 1.0, final=True, clarity=0.1).kind, PlanKind.EXECUTE)
+
+    def test_a_missing_score_does_not_block_a_floor_that_is_set(self):
+        plan = gate(self.SCROLL, 1.0, final=True, clarity=None, clarity_floor=2.5)
+        self.assertIs(plan.kind, PlanKind.EXECUTE)

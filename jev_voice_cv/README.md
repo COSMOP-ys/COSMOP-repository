@@ -226,10 +226,50 @@ Rules 2, 4 and the command filter are load-bearing; the per-action thresholds
 are mostly not, at least on this evidence. Do not treat a Jev choice
 probability as a measure of whether the answer is right.
 
-The obvious next move is to stop asking for a probability the model does not
-have and ask a `score` question instead — "how clearly does this utterance name
-one of these actions?" over ordered rungs — which is the question type built to
-produce gradation. Untested here.
+## Asking a second question instead of trusting the first
+
+`choice` is decent at *which* action (83–88%). It is the *how sure* that is
+useless. So stop asking one question to do two jobs and add a `score` question
+— the type built to produce gradation — about the same utterance:
+
+> How clearly does this utterance name one single action from the list, as an
+> instruction to a computer?
+
+over five ordered rungs, from "not an instruction at all" to "unmistakable".
+It rides along in the request already being sent, so it costs input tokens and
+no round trip. Set `VoicePipeline(clarity_floor=2.5)` to turn it on; it is off
+by default.
+
+Measured on the same 24 cases, restricted to the 18 answers that picked an
+action — blocking a `no_action` answer is free, since the pipeline rejects
+those anyway, and counting them makes any bar look far worse than it is:
+
+```
+                 correct (15)   wrong (3)
+clarity  mean        3.20          2.17     <- separates
+choice p mean        0.95          0.91     <- does not
+
+ 2.21  p=1.00  WRONG  scroll to the
+ 2.32  p=0.75  WRONG  show me the delete button
+ 1.97  p=0.98  WRONG  she said we should delete the whole thing
+ 2.12  p=0.99  ok     click the sa          | fragments: held anyway
+ 2.21  p=0.97  ok     open the              | on a partial transcript
+ 2.68  p=1.00  ok     delete                |
+ 0.74  p=0.35  ok     where is the cancel button
+ 3.14 … 3.91          every complete, correct command
+```
+
+Every complete command scores 3.14 or better; everything under 2.7 is either
+wrong or an unfinished fragment. **A floor at 2.5 blocks all three misses**,
+including both of the dangerous ones the probability waved through at 0.98 and
+1.00, and the only complete command it costs is the one indirect phrasing
+("where is the cancel button"), which the choice probability had already put at
+0.35 and headed for CONFIRM.
+
+Caveats worth more than the numbers: 18 actionable answers, three of them
+wrong, one sample, batched. A bar tuned to three misses is a bar tuned to
+noise. The rung wording is load-bearing. Treat 2.5 as a starting point and run
+`scripts/probe_clarity.py` against your own set before shipping it.
 
 ## What to measure
 

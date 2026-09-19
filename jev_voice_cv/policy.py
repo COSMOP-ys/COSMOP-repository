@@ -48,6 +48,8 @@ def gate(
     final: bool,
     target: Candidate | None = None,
     trace: tuple[str, ...] = (),
+    clarity: float | None = None,
+    clarity_floor: float | None = None,
 ) -> Plan:
     """Decide what to do with a scored action, at the given point in the utterance."""
 
@@ -69,6 +71,12 @@ def gate(
 
     if confidence < spec.reject_floor:
         return plan(PlanKind.HOLD if not final else PlanKind.REJECT, "below reject floor")
+
+    if clarity_floor is not None and clarity is not None and clarity < clarity_floor:
+        # The separate `score` question, which unlike the choice probability
+        # actually varies. See the pipeline for what it asks and the README for
+        # what it measured.
+        return plan(PlanKind.HOLD if not final else PlanKind.CONFIRM, "below the clarity floor")
 
     if not final:
         if not (spec.read_only and spec.idempotent):

@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Sequence
 
 from .grounding import Frame, Grounder
-from .jev import Chooser, boolean, choice
+from .jev import Chooser, boolean, choice, score
 from .policy import combine, gate
 from .schema import ActionSpec, Candidate, Plan, PlanKind
 
@@ -32,6 +32,25 @@ NO_ACTION = "no_action"
 _ADDRESSED = "Is the transcript an instruction addressed to this computer?"
 _INTENT = "Which action does the speaker want?"
 _TARGET = "Which on-screen candidate is the speaker referring to?"
+
+# A second question about the same answer, asked because the first one refuses
+# to vary: Jev's choice probability comes back at 1.00 for nearly everything,
+# including answers that are wrong, so it cannot carry a threshold. `score` is
+# the question type built to produce gradation, and measured against a labelled
+# set it does - see the README. The rung wording is doing the work here; each
+# one has to name a state a real utterance can be in, or the middle cases have
+# nowhere to go and the scale collapses back to its endpoints.
+CLARITY = (
+    "How clearly does this utterance name one single action from the list, "
+    "as an instruction to a computer?"
+)
+CLARITY_RUNGS: tuple[str, ...] = (
+    "not an instruction at all: a question, an aside, or talk about something else",
+    "an instruction, but which action is guesswork: it fits several equally, or none",
+    "an unfinished instruction: the action is implied but the sentence stops short",
+    "one action fits clearly, though the words are loose or indirect",
+    "unmistakable: it names exactly one of these actions and nothing else",
+)
 
 
 @dataclass(frozen=True)
@@ -55,6 +74,12 @@ class VoicePipeline:
     # conversation cause more wrong actions than misheard commands do.
     command_filter: bool = True
     command_threshold: float = 0.60
+    # Minimum position on the CLARITY_RUNGS scale before an action may run
+    # unattended. None disables the question entirely; it rides along in the
+    # request that is already being sent, so enabling it costs tokens and no
+    # round trip. 2.5-3.0 is what the labelled set suggests, on 18 answers -
+    # calibrate before trusting it.
+    clarity_floor: float | None = None
 
     _seq: int = field(default=0, init=False)
 
@@ -122,6 +147,8 @@ class VoicePipeline:
                 true="a command meant for this machine",
                 false="thinking aloud, or talk directed at another person",
             )
+        if self.clarity_floor is not None:
+            questions["clarity"] = score(CLARITY, CLARITY_RUNGS)
 
         answers = self.jev.evaluate(state=state, questions=questions)
         if self._stale(ticket):
@@ -137,6 +164,10 @@ class VoicePipeline:
         trace.append(f"intent={intent.choice}@{intent.confidence:.2f}")
         if intent.choice == NO_ACTION:
             return unmatched("no action matched", intent.confidence)
+
+        clarity = answers["clarity"].score if "clarity" in answers else None
+        if clarity is not None:
+            trace.append(f"clarity={clarity:.2f}")
 
         spec = self._by_name[intent.choice]
         target: Candidate | None = None
@@ -163,6 +194,8 @@ class VoicePipeline:
             final=ticket.final,
             target=target,
             trace=tuple(trace),
+            clarity=clarity,
+            clarity_floor=self.clarity_floor,
         )
 
     def _resolve_target(
