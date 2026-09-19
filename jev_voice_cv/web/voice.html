@@ -165,9 +165,19 @@ const HANDLERS = {
   },
   click_element: (node) => { node.click(); return 'clicked ' + node.textContent.trim(); },
   type_text: (node, plan, text) => {
+    // No target is legitimate - "type it in here" while a field has focus -
+    // so fall back rather than dereferencing null.
+    const field = node || document.activeElement;
+    if (!field || !('value' in field)) {
+      throw new Error('nothing to type into: name the field, or focus it first');
+    }
     if (!text) throw new Error('type_text needs text and none was dictated');
-    node.focus(); node.value = text;
-    return 'typed into ' + (node.id || plan.target.ref);
+    field.focus();
+    field.value = text;
+    // The whole transcript, because Jev returns choices and never prose. A
+    // real system extracts the dictated part with a small LLM; this shows you
+    // exactly where that piece is missing.
+    return 'typed the raw transcript into ' + (field.id || 'the focused field');
   },
 };
 

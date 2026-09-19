@@ -40,8 +40,13 @@ BROWSER_ACTIONS: tuple[ActionSpec, ...] = (
     ),
     ActionSpec(
         "type_text",
-        "enter dictated text into the focused field",
-        execute_threshold=0.90, speculate_threshold=0.99, needs_text_arg=True,
+        "enter dictated text into a named field, or into the focused one",
+        execute_threshold=0.90, speculate_threshold=0.99,
+        # People name the field they mean - "put my email in the email box" -
+        # far more often than they rely on what happens to be focused. Saying
+        # this action takes no target means the executor is handed nothing to
+        # type into and fails at the last step of a decision that was right.
+        needs_target=True, needs_text_arg=True,
     ),
     ActionSpec(
         "create_note",
