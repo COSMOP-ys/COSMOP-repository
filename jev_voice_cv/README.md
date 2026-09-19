@@ -175,40 +175,61 @@ exist until an action that needs a target has been chosen.
 
 ## What the probabilities actually look like
 
-24 labelled utterances, batched, 2026-09-19. Small, one sample, and see the
-caveat in `batched()` — but the shape is unambiguous:
+24 labelled utterances, 2026-09-19, run twice: once per utterance (the request
+the pipeline actually sends) and once batched into a single request. Small, one
+sample each — but the two agree on the shape, so it is not an artifact of
+batching.
 
 ```
-intent    88% correct (21/24)        addressed  92% correct
-  reported     n   said  right         reported     n   said  right
-  0.95-1.00   21   1.00   0.90         0.70-0.85   11   0.80   0.91
-  0.85-0.95    1   0.91   1.00         0.85-0.95   10   0.90   1.00
-  0.50-0.70    1   0.68   0.00         0.95-1.00    2   0.96   1.00
+                one request per utterance          all 24 in one request
+intent          83% correct (20/24)                88% correct (21/24)
+  reported     n   said  right                reported     n   said  right
+  0.95-1.00   18   1.00   0.89                0.95-1.00   21   1.00   0.90
+  0.85-0.95    2   0.92   1.00                0.85-0.95    1   0.91   1.00
+  0.70-0.85    2   0.77   0.50                0.50-0.70    1   0.68   0.00
+  0.50-0.70    2   0.59   0.50
+
+addressed       88% correct                        92% correct
+  0.95-1.00    2   0.96   1.00                0.95-1.00    2   0.96   1.00
+  0.85-0.95    5   0.88   0.80                0.85-0.95   10   0.90   1.00
+  0.70-0.85    6   0.81   1.00                0.70-0.85   11   0.80   0.91
+  0.50-0.70   11   0.61   0.82
+
+latency p50 450 ms (min 347), n=24
 ```
 
-**The intent axis is saturated.** Twenty-one of twenty-four answers report
-1.00, and one in ten of those is wrong. Every `execute_threshold` between 0.70
-and 0.99 therefore admits exactly the same set — on the intent axis the dial is
-close to a no-op, and a wrong answer arrives wearing the same 1.00 as a right
-one. Two of the three misses were reported at 0.98 and 1.00.
+**The intent axis is saturated.** Eighteen of twenty-four answers report 1.00,
+and one in nine of those is wrong. Every `execute_threshold` between 0.70 and
+0.99 therefore admits the same set — on the intent axis the dial is close to a
+no-op, and a wrong answer arrives wearing the same 1.00 as a right one.
 
-**The boolean is the axis with real gradation**, and it is roughly calibrated:
-0.80 → 91% right, 0.90 → 100%. It is also lower than you would guess on
-obviously-addressed commands, so `command_threshold = 0.60` has less headroom
-than it looks.
+**The boolean is the axis with real gradation, and it sits low.** Per utterance,
+*eleven of twenty-four* land in 0.50–0.70, averaging 0.61 — against a default
+`command_threshold` of 0.60. Nearly half the traffic decides within a hundredth
+of the line, which means whether a perfectly ordinary command is heard at all
+comes down to rounding. Raise the bar and real commands get dropped; lower it
+and the filter stops filtering. It is 82% right in that band, so the ordering
+carries information — the threshold is just in the worst possible place.
+Batching hid this: with all 24 transcripts in view the same question came back
+around 0.80.
 
 What this says about the design: the safety comes from the structure, not from
 the number. Look at what caught the two dangerous misses.
 
-- `"she said we should delete the whole thing"` → `delete_element` at **0.98**,
+- `"she said we should delete the whole thing"` → `delete_element` at **1.00**,
   comfortably past delete's 0.95 bar. Stopped by `always_confirm`, and by the
   addressed filter. Not by the confidence.
 - `"scroll to the"` (a fragment) → `scroll_to_element` at **1.00**, past
   scroll's 0.88 speculation bar. Stopped only because "the" grounds to nothing.
 
-Rules 1, 4 and the command filter are load-bearing; the per-action thresholds
+Rules 2, 4 and the command filter are load-bearing; the per-action thresholds
 are mostly not, at least on this evidence. Do not treat a Jev choice
 probability as a measure of whether the answer is right.
+
+The obvious next move is to stop asking for a probability the model does not
+have and ask a `score` question instead — "how clearly does this utterance name
+one of these actions?" over ordered rungs — which is the question type built to
+produce gradation. Untested here.
 
 ## What to measure
 

@@ -192,22 +192,26 @@ class GatewayJev(_ChooserMixin):
                 "ai-model-id": self._model,
             },
         )
-        started = time.perf_counter()
-        payload = self._post(request)
-        latency_ms = (time.perf_counter() - started) * 1000
+        payload, latency_ms = self._post(request)
         return _parse_response(payload, questions, latency_ms)
 
-    def _post(self, request: urllib.request.Request) -> Any:
+    def _post(self, request: urllib.request.Request) -> tuple[Any, float]:
         """Send it, retrying only what retrying can fix.
 
         The free tier rate-limits per model, and a 429 is not a failure of the
         request - the same bytes succeed a moment later. Everything else is
         raised immediately: retrying a 400 just makes the same mistake slower.
+
+        The latency returned times the attempt that succeeded, not the wall
+        clock since the first try. Folding a rate-limit backoff into "how fast
+        is Jev" would report minutes for a sub-second model.
         """
         for attempt in range(self._max_retries + 1):
+            started = time.perf_counter()
             try:
                 with urllib.request.urlopen(request, timeout=self._timeout) as response:
-                    return json.loads(response.read())
+                    payload = json.loads(response.read())
+                    return payload, (time.perf_counter() - started) * 1000
             except urllib.error.HTTPError as exc:
                 if exc.code != 429 or attempt == self._max_retries:
                     # Surface the body; it is what explains a 4xx.

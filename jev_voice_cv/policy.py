@@ -6,15 +6,21 @@ decision can still be semantically wrong. So every decision passes a gate that
 is sized to the cost of that action being wrong.
 
 MEASURED, 2026-09-19, and it matters for how much these thresholds buy you: on
-a 24-case labelled set, 21 of 24 intent answers came back reporting 1.00, and
-one in ten of those was wrong. On the intent axis the probability is saturated,
-so every `execute_threshold` between 0.70 and 0.99 admits the same set, and a
-wrong answer looks exactly like a right one. What actually stopped the two
-dangerous cases was `always_confirm`, the read-only-only speculation rule, and
-having no grounded target - structure, not the number. The boolean command
-filter and the grounding score are the two inputs here that do vary. Treat the
-thresholds as a policy statement about what may run unattended, not as a
-statistical filter, until you have recalibrated on your own traffic.
+a 24-case labelled set, 18 of 24 intent answers came back reporting 1.00, and
+one in nine of those was wrong. On the intent axis the probability is
+saturated, so every `execute_threshold` between 0.70 and 0.99 admits the same
+set, and a wrong answer looks exactly like a right one. What actually stopped
+the two dangerous cases was `always_confirm`, the read-only-only speculation
+rule, and having no grounded target - structure, not the number.
+
+`command_threshold` is worse placed than saturated. Eleven of the 24 utterances
+scored 0.50-0.70 on "is this addressed to the computer", averaging 0.61 against
+a default bar of 0.60: half the traffic is decided by a hundredth. The ordering
+does carry information (82% right in that band), so the fix is to calibrate the
+bar on recorded audio rather than to move it by feel.
+
+Treat all of these as a policy statement about what may run unattended, not as
+a statistical filter, until you have recalibrated on your own traffic.
 """
 
 from __future__ import annotations

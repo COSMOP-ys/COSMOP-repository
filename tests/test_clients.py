@@ -181,6 +181,17 @@ class RetryTest(unittest.TestCase):
         self.assertAlmostEqual(answers["q"].probabilities["yes"], 0.8)
         self.assertEqual(slept, [2.0])
 
+    def test_latency_times_the_attempt_that_landed_not_the_backoff(self):
+        # A 165s rate-limit wait folded into "how fast is Jev" reports minutes
+        # for a sub-second model.
+        # attempt 1 starts, 429; attempt 2 starts at 100.0 and lands at 100.25.
+        clock = iter([0.0, 100.0, 100.25])
+        client, fake = self._client([_FakeHTTPError(429, "90"), self._ok()], [])
+        with unittest.mock.patch.object(jev_module.urllib.request, "urlopen", fake), \
+                unittest.mock.patch.object(jev_module.time, "perf_counter", lambda: next(clock)):
+            answers = client.evaluate(state={}, questions={"q": boolean("Is it?")})
+        self.assertAlmostEqual(answers["q"].latency_ms, 250.0)
+
     def test_retries_are_bounded(self):
         slept: list[float] = []
         client, fake = self._client([_FakeHTTPError(429) for _ in range(4)], slept)
