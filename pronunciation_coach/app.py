@@ -7,6 +7,7 @@ import os
 import gradio as gr
 
 from coach.pipeline import assess
+from coach import conversation as conv
 
 SAMPLES = [
     "I think the right answer is light.",
@@ -67,22 +68,85 @@ def run(text: str, audio_path: str | None, use_claude: bool):
     return f"{a.score} / 100", _render(a.results), "\n".join(f"- {m}" for m in a.mistakes) or "誤りなし", advice
 
 
+TOPICS = ["カフェで注文する", "空港・ホテルでのやりとり", "仕事の面接", "自己紹介・雑談", "道を尋ねる"]
+
+
+def _need_key():
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        raise gr.Error("会話モードには ANTHROPIC_API_KEY の設定が必要です。")
+
+
+def start_chat(topic, level):
+    _need_key()
+    reply, fb = conv.chat_turn([], None, topic, level)
+    hist = [{"role": "user", "content": "(start)"}, {"role": "assistant", "content": reply}]
+    return hist, [{"role": "assistant", "content": reply}], "会話を始めました。録音して返事をしてみましょう。"
+
+
+def talk(audio_path, hist, shown, topic, level, do_pron):
+    _need_key()
+    if not hist:
+        raise gr.Error("先に「会話を始める」を押してください。")
+    if not audio_path:
+        raise gr.Error("音声を録音してください。")
+    try:
+        text = conv.transcribe(audio_path)
+    except Exception as e:
+        raise gr.Error(f"文字起こしに失敗しました: {e}")
+    if not text:
+        raise gr.Error("音声を認識できませんでした。もう一度録音してください。")
+
+    note, score_txt = "", ""
+    if do_pron:
+        try:
+            a = assess(text, audio_path)
+            note = f"score {a.score}/100; " + ("; ".join(a.mistakes[:6]) or "no errors detected")
+            score_txt = f"**発音スコア: {a.score}/100**\n\n" + ("\n".join(f"- {m}" for m in a.mistakes[:6]) or "誤りなし")
+        except Exception as e:
+            score_txt = f"(発音採点をスキップ: {e})"
+    reply, fb = conv.chat_turn(hist, text, topic, level, note)
+    hist = hist + [{"role": "user", "content": text}, {"role": "assistant", "content": reply}]
+    shown = shown + [{"role": "user", "content": text}, {"role": "assistant", "content": reply}]
+    return hist, shown, None, score_txt + ("\n\n---\n" if score_txt else "") + fb
+
+
 with gr.Blocks(title="Pronunciation Coach") as demo:
-    gr.Markdown("# 🎤 English Pronunciation Coach\n英文を読み上げて録音 → 音素レベルで採点 → Claude が日本語でアドバイス")
-    with gr.Row():
-        with gr.Column():
-            sample = gr.Dropdown(SAMPLES, label="サンプル文", value=SAMPLES[0])
-            text = gr.Textbox(label="練習する英文", value=SAMPLES[0], lines=2)
-            audio = gr.Audio(sources=["microphone", "upload"], type="filepath", label="音声")
-            use_claude = gr.Checkbox(value=True, label="Claude のアドバイスを表示")
-            btn = gr.Button("採点する", variant="primary")
-        with gr.Column():
-            score_box = gr.Textbox(label="スコア", interactive=False)
-            phones = gr.HTML(label="音素ごとの結果")
-            errs = gr.Markdown(label="検出された誤り")
-            advice = gr.Markdown(label="コーチからのアドバイス")
-    sample.change(lambda s: s, sample, text)
-    btn.click(run, [text, audio, use_claude], [score_box, phones, errs, advice])
+    gr.Markdown("# 🎤 English Pronunciation Coach")
+    with gr.Tab("発音練習"):
+        gr.Markdown("英文を読み上げて録音 → 音素レベルで採点 → Claude が日本語でアドバイス")
+        with gr.Row():
+            with gr.Column():
+                sample = gr.Dropdown(SAMPLES, label="サンプル文", value=SAMPLES[0])
+                text = gr.Textbox(label="練習する英文", value=SAMPLES[0], lines=2)
+                audio = gr.Audio(sources=["microphone", "upload"], type="filepath", label="音声")
+                use_claude = gr.Checkbox(value=True, label="Claude のアドバイスを表示")
+                btn = gr.Button("採点する", variant="primary")
+            with gr.Column():
+                score_box = gr.Textbox(label="スコア", interactive=False)
+                phones = gr.HTML(label="音素ごとの結果")
+                errs = gr.Markdown(label="検出された誤り")
+                advice = gr.Markdown(label="コーチからのアドバイス")
+        sample.change(lambda s: s, sample, text)
+        btn.click(run, [text, audio, use_claude], [score_box, phones, errs, advice])
+
+    with gr.Tab("会話練習"):
+        gr.Markdown("Claude と英語で会話 → 毎ターン、文法の添削と発音スコアを表示します。")
+        hist_state = gr.State([])  # Claude に渡す履歴
+        with gr.Row():
+            topic = gr.Dropdown(TOPICS, value=TOPICS[0], label="シチュエーション", allow_custom_value=True)
+            level = gr.Radio(list(conv.LEVELS), value="中級", label="レベル")
+            do_pron = gr.Checkbox(value=True, label="発音も採点する")
+            start_btn = gr.Button("会話を始める / リセット", variant="primary")
+        with gr.Row():
+            with gr.Column(scale=3):
+                chat = gr.Chatbot(label="会話", height=380)
+                chat_audio = gr.Audio(sources=["microphone", "upload"], type="filepath", label="あなたの返事(録音)")
+                talk_btn = gr.Button("送信")
+            with gr.Column(scale=2):
+                feedback = gr.Markdown("ここに添削と発音スコアが表示されます。")
+        start_btn.click(start_chat, [topic, level], [hist_state, chat, feedback])
+        talk_btn.click(talk, [chat_audio, hist_state, chat, topic, level, do_pron],
+                       [hist_state, chat, chat_audio, feedback])
 
 if __name__ == "__main__":
     demo.launch()

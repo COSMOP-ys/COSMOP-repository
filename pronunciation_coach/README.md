@@ -24,6 +24,14 @@ python app.py   # → http://127.0.0.1:7860
 スコア・音素ごとの色分け結果・Claude のアドバイスが表示されます。
 `ANTHROPIC_API_KEY` が未設定でもスコア表示までは使えます。
 
+### 会話練習タブ
+シチュエーションとレベルを選んで「会話を始める」→ 録音して返事 → Claude が英語で返答します。
+右側に、毎ターンの **文法・表現の添削(日本語)** と **発音スコア** が出ます。
+- 音声は Whisper(`openai/whisper-small.en`、環境変数 `WHISPER_MODEL` で変更可)で文字起こしします。
+- 発音スコアは「文字起こし結果」を期待文として採点します。Whisper は文脈で補正して正しい単語を
+  出しがちなので、発音練習タブ(正解文を指定)より甘めに出ます。
+- 会話モードには `ANTHROPIC_API_KEY` が必須です。返答の読み上げ(TTS)はありません。
+
 ## 使い方(CLI)
 ```bash
 python cli.py "I think the right answer is light." --record 5
