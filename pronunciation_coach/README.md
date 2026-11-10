@@ -30,7 +30,9 @@ python app.py   # → http://127.0.0.1:7860
 - 音声は Whisper(`openai/whisper-small.en`、環境変数 `WHISPER_MODEL` で変更可)で文字起こしします。
 - 発音スコアは「文字起こし結果」を期待文として採点します。Whisper は文脈で補正して正しい単語を
   出しがちなので、発音練習タブ(正解文を指定)より甘めに出ます。
-- 会話モードには `ANTHROPIC_API_KEY` が必須です。返答の読み上げ(TTS)はありません。
+- 返答は `facebook/mms-tts-eng`(VITS、環境変数 `TTS_MODEL` で変更可)でローカル合成し、自動再生します。
+  初回はモデルをダウンロードします。音質は商用 TTS ほど自然ではありません。「返答を読み上げる」で ON/OFF できます。
+- 会話モードには `ANTHROPIC_API_KEY` が必須です。
 
 ## 使い方(CLI)
 ```bash
