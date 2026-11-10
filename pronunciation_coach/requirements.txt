@@ -1,0 +1,8 @@
+anthropic
+transformers
+torch
+librosa
+phonemizer
+# マイク録音を使う場合のみ
+sounddevice
+soundfile
