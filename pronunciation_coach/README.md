@@ -8,7 +8,17 @@
 英文 ─▶ espeak-ng(期待音素) ─┘
 ```
 
-## セットアップ
+## ワンクリック起動(おすすめ)
+| OS | ダブルクリックするファイル |
+|---|---|
+| Windows | `Start-Windows.bat` |
+| macOS | `Start-Mac.command`(初回は右クリック → 開く) |
+| Linux | `start-linux.sh` |
+
+初回は仮想環境の作成と依存のインストールを自動で行い、API キーの入力を求めます(`.env` に保存。Git 管理外)。
+その後ブラウザでアプリが開きます。`espeak-ng` だけは別途インストールが必要です(下記)。
+
+## セットアップ(手動)
 ```bash
 sudo apt-get install espeak-ng libsndfile1 libportaudio2   # macOS: brew install espeak-ng
 pip install -r requirements.txt

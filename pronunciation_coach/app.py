@@ -162,4 +162,4 @@ with gr.Blocks(title="Pronunciation Coach") as demo:
                        [hist_state, chat, chat_audio, feedback, reply_audio])
 
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(inbrowser=True)
