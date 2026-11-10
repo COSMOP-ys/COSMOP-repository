@@ -1,4 +1,5 @@
 anthropic
+gradio
 transformers
 torch
 librosa

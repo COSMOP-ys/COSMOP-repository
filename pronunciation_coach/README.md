@@ -16,7 +16,15 @@ export ANTHROPIC_API_KEY=...
 ```
 初回実行時に Hugging Face から音素認識モデル(約1.2GB)をダウンロードします。
 
-## 使い方
+## 使い方(Web UI)
+```bash
+python app.py   # → http://127.0.0.1:7860
+```
+ブラウザのマイクで録音(または音声ファイルをアップロード)して「採点する」を押すと、
+スコア・音素ごとの色分け結果・Claude のアドバイスが表示されます。
+`ANTHROPIC_API_KEY` が未設定でもスコア表示までは使えます。
+
+## 使い方(CLI)
 ```bash
 python cli.py "I think the right answer is light." --record 5
 python cli.py "I think the right answer is light." --wav my.wav

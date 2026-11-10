@@ -8,7 +8,7 @@ from __future__ import annotations
 import argparse
 import tempfile
 
-from coach.scoring import align, mistakes, score
+from coach.pipeline import assess
 
 
 def main() -> None:
@@ -20,15 +20,13 @@ def main() -> None:
     ap.add_argument("--no-claude", action="store_true", help="Claude のフィードバックを省略")
     args = ap.parse_args()
 
-    from coach.phonemes import expected_phonemes, record, recognize_phonemes
+    from coach.phonemes import record
 
     wav = args.wav or record(args.record, tempfile.mkstemp(suffix=".wav")[1])
-    expected = expected_phonemes(args.text)
-    heard = recognize_phonemes(wav)
-    results = align(expected, heard)
-    s, errs = score(results), mistakes(results)
+    a = assess(args.text, wav)
+    s, errs = a.score, a.mistakes
 
-    print(f"期待: {' '.join(expected)}\n認識: {' '.join(heard)}")
+    print(f"期待: {' '.join(a.expected)}\n認識: {' '.join(a.heard)}")
     print(f"\nスコア: {s}/100")
     for e in errs:
         print(f"  - {e}")
